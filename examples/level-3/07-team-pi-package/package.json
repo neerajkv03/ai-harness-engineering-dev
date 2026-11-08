@@ -1,0 +1,15 @@
+{
+  "name": "@acme/pi-team-setup",
+  "version": "1.0.0",
+  "description": "Team Pi setup: http_status tool, release-notes skill, review prompt",
+  "keywords": ["pi-package"],
+  "pi": {
+    "extensions": ["./extensions"],
+    "skills": ["./skills"],
+    "prompts": ["./prompts"]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "typebox": "*"
+  }
+}

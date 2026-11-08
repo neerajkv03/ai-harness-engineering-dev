@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "es2023",
+    "module": "esnext",
+    "lib": ["ES2023"],
+    "types": ["node"],
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true
+  },
+  "include": ["./**/*.ts"],
+  "exclude": [
+    "level-3/03-pi-extension-http-status/index.ts",
+    "level-4/01-pi-guard/index.ts",
+    "level-4/02-pi-auto-format/index.ts",
+    "level-4/05-pi-deploy-command/index.ts",
+    "level-5/06-pi-sdk.ts"
+  ]
+}

@@ -8,6 +8,8 @@ export default function (pi: ExtensionAPI) {
     description: "Deploy a preview build to dev or staging",
     getArgumentCompletions: completions,
     handler: async (args, ctx) => {
+      // Print and JSON modes have no UI: confirm() cannot ask anyone. Refuse rather than deploy unconfirmed.
+      if (!ctx.hasUI) return;
       const parsed = parseEnvironment(args);
       if (!parsed.ok) {
         ctx.ui.notify(parsed.message, "warning");

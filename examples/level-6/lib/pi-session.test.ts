@@ -29,6 +29,18 @@ test("adds up tokens and cost", () => {
   assert.equal(s.costUsd, 0.0418);
 });
 
+test("counts usage that is not an assistant message: usage entries, compaction and branch summaries", () => {
+  const u = (input: number, cost: number) => ({ input, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: input, cost: { total: cost } });
+  const lines = [
+    { type: "usage", id: "u1", parentId: null, kind: "cache_warm", model: "claude-opus-5-5", usage: u(1000, 0.01) },
+    { type: "compaction", id: "c1", parentId: "u1", summary: "s", firstKeptEntryId: "u1", tokensBefore: 5000, usage: u(5000, 0.02) },
+    { type: "branch_summary", id: "b1", parentId: "c1", fromId: "c1", summary: "s", usage: u(200, 0.001) },
+  ];
+  const s = summarizePiSession(lines.map((l) => JSON.stringify(l)).join("\n"));
+  assert.equal(s.usage.input, 6200);
+  assert.equal(s.costUsd, 0.031);
+});
+
 test("ignores blank lines", () => {
   assert.equal(summarizePiSession(`\n${fixture}\n\n`).assistantMessages, 5);
 });

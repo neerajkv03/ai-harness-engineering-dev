@@ -9,10 +9,13 @@ const TICKET = `Subject: charged twice!!
 Hi, I bought the Pro plan yesterday and my card shows two charges of $5. Please fix this today.
 Thanks, Ada (ada@example.com)`;
 
-const fake: StepModel = async ({ prompt }) =>
-  prompt.startsWith("Extract")
-    ? { product: "billing", severity: "high", summary: "Customer was charged twice for the Pro plan.", customerEmail: "ada@example.com" }
-    : { subject: "About your double charge", body: "Sorry about the double charge. We are looking into it now and will refund the extra one.", needsHuman: true };
+const fake: StepModel = Object.assign(
+  async ({ prompt }: { prompt: string }) =>
+    prompt.startsWith("Extract")
+      ? { product: "billing", severity: "high", summary: "Customer was charged twice for the Pro plan.", customerEmail: "ada@example.com" }
+      : { subject: "About your double charge", body: "Sorry about the double charge. We are looking into it now and will refund the extra one.", needsHuman: true },
+  { id: "fake" }, // its own cache entries: a later real run must not be served these canned answers
+);
 
 const model = process.argv.includes("--fake") ? fake : claudeStepModel();
 const cache = new StepCache(path.join(os.tmpdir(), "level7-workflow-cache"));

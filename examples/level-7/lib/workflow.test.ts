@@ -106,6 +106,15 @@ test("a run that crashes mid-way resumes: finished steps are not paid for twice"
   assert.deepEqual(resumed.calls, { extract: 0, review: 1 }, "extract came from disk; only the unfinished step ran");
 });
 
+test("a different model never reuses another model's cached answers (a real run after --fake recomputes)", async () => {
+  const dir = tmp();
+  const fake = fakeModel();
+  await triageTicket("t", { model: Object.assign(fake.model, { id: "fake" }), cache: new StepCache(dir) });
+  const real = fakeModel();
+  await triageTicket("t", { model: Object.assign(real.model, { id: "claude-opus-5-5" }), cache: new StepCache(dir) });
+  assert.deepEqual(real.calls, { extract: 1, review: 1 });
+});
+
 test("bumping a step's version invalidates exactly that step", async () => {
   const dir = tmp();
   await triageTicket("t", { model: fakeModel().model, cache: new StepCache(dir), versions: { extract: "v1", review: "v1" } });

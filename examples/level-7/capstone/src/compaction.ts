@@ -48,6 +48,11 @@ export async function compactIfNeeded(opts: { messages: Message[]; call: Caller;
   return [
     { role: "user", content: `${SUMMARY_MARKER}\n${textOf(res)}` },
     { role: "assistant", content: "Understood. I will continue from this summary." },
-    ...messages.slice(cut), // the recent tail, untouched
+    ...messages.slice(cut).map(withoutThinking), // the recent tail, word for word apart from thinking blocks
   ];
 }
+
+// Thinking blocks are bound to the exact history they were produced with. After a summary replaces the turns before
+// them, replaying them is an edited history, which current models reject (a 400). Text and tool calls can stay.
+const withoutThinking = (m: Message): Message =>
+  m.role === "assistant" && Array.isArray(m.content) ? { ...m, content: m.content.filter((b) => b.type !== "thinking" && b.type !== "redacted_thinking") } : m;

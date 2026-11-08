@@ -29,11 +29,20 @@ test("the grader checks the outcome, not what the agent claimed", async () => {
   assert.equal(r.detail, "no done.txt");
 });
 
-test("a crashing agent is a failed trial, not a crashed eval", async () => {
+test("a crashing run is recorded as an error, not a crashed eval", async () => {
   const task: Task = { id: "t3", prompt: "x", setup: () => {}, grade: async () => ({ pass: true }) };
-  const r = await runTrialInTempDir(task, async () => { throw new Error("agent exploded"); });
+  const r = await runTrialInTempDir(task, async () => { throw new Error("429 rate limited"); });
   assert.equal(r.pass, false);
-  assert.match(r.detail!, /agent exploded/);
+  assert.equal(r.error, true);
+  assert.match(r.detail!, /429 rate limited/);
+});
+
+test("errors are counted apart: a rate limit is not the agent failing the task", () => {
+  const rec = (pass: boolean, error?: boolean) => ({ variant: "A", taskId: "t", trial: 0, pass, turns: 1, tokens: 10, ms: 1, ...(error && { error }) });
+  const s = summarize([rec(true), rec(false), rec(false, true), rec(false, true)]);
+  assert.equal(s.errors, 2);
+  assert.equal(s.n, 2, "only graded trials count");
+  assert.equal(s.passRate, 0.5);
 });
 
 test("runEval runs every task for every trial and summarizes", async () => {

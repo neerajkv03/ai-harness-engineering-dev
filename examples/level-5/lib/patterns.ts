@@ -17,7 +17,7 @@ export async function fanOutFanIn(opts: {
   );
   const reports = settled.map((s, i) => {
     if (s.status === "rejected") return `Worker ${i + 1} FAILED: ${String(s.reason)}`;
-    return s.value.finished ? s.value.text : `Worker ${i + 1} ran out of turns without a report.`;
+    return s.value.finished ? s.value.text : `Worker ${i + 1} stopped without a report (${s.value.stopReason}).`;
   });
 
   // Fan-in: one final call that sees only the reports, never the workers' raw reading.
@@ -35,12 +35,20 @@ export async function fanOutFanIn(opts: {
 
 export type GateResult = { ok: boolean; output: string };
 
-/** Run a command as a deterministic check. No model involved: it passes or it does not. */
-export function runGate(cmd: string, args: string[], cwd: string, timeoutMs = 30_000): Promise<GateResult> {
-  // A gate must not inherit the caller's test-runner state. Under `node --test`, a nested `node --test`
-  // sees NODE_TEST_CONTEXT, behaves as a child worker, and can report success without really running.
-  const env = { ...process.env };
-  delete env.NODE_TEST_CONTEXT;
+// The only variables the gate passes on: enough to find and run node, nothing secret.
+const GATE_ENV = new Set(["PATH", "HOME", "USERPROFILE", "SYSTEMROOT", "TEMP", "TMP", "TMPDIR", "LANG"]);
+
+/**
+ * Run a command as a deterministic check. No model involved: it passes or it does not.
+ * The command runs code the agent wrote, so it gets a minimal environment: no ANTHROPIC_API_KEY, no tokens.
+ * Pass anything the check really needs in `extraEnv`.
+ */
+export function runGate(cmd: string, args: string[], cwd: string, timeoutMs = 30_000, extraEnv: Record<string, string> = {}): Promise<GateResult> {
+  // Copying only named variables also drops NODE_TEST_CONTEXT: under `node --test`, a nested `node --test`
+  // that sees it behaves as a child worker and can report success without really running.
+  const env: Record<string, string> = {};
+  for (const [k, v] of Object.entries(process.env)) if (v !== undefined && GATE_ENV.has(k.toUpperCase())) env[k] = v;
+  Object.assign(env, extraEnv);
 
   return new Promise((resolve) => {
     execFile(cmd, args, { cwd, timeout: timeoutMs, env }, (error, stdout, stderr) => {

@@ -19,7 +19,7 @@ async function summarize(messages: Anthropic.MessageParam[]): Promise<string> {
   const transcript = messages.map((m) => `${m.role.toUpperCase()}: ${String(m.content)}`).join("\n\n");
   const reply = await client.messages.create({
     model: MODEL,
-    max_tokens: 2048,
+    max_tokens: 16000,
     system: SUMMARY_PROMPT,
     messages: [{ role: "user", content: transcript }],
   });
@@ -38,7 +38,9 @@ const questions = [
 let history: Anthropic.MessageParam[] = [];
 for (const question of questions) {
   history.push({ role: "user", content: question });
-  const reply = await client.messages.create({ model: MODEL, max_tokens: 1024, messages: history });
+  const reply = await client.messages.create({ model: MODEL, max_tokens: 16000, messages: history });
+  // Text only, on purpose: thinking blocks are tied to the exact history they were made with. After compaction
+  // replaces the turns before them, replaying them would be rejected, so this demo never keeps them.
   history.push({ role: "assistant", content: textOf(reply) });
 
   const used = reply.usage.input_tokens + reply.usage.output_tokens;

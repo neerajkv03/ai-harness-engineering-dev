@@ -12,7 +12,8 @@ export type Task = {
   grade: (dir: string) => Promise<{ pass: boolean; detail?: string }>;
 };
 
-export type TrialResult = { pass: boolean; turns: number; tokens: number; ms: number; detail?: string };
+/** `error` marks a run that crashed (rate limit, network, missing key, harness bug): it was never graded. */
+export type TrialResult = { pass: boolean; turns: number; tokens: number; ms: number; detail?: string; error?: boolean; costUsd?: number };
 export type TrialRecord = TrialResult & { variant: string; taskId: string; trial: number };
 
 /**
@@ -21,18 +22,19 @@ export type TrialRecord = TrialResult & { variant: string; taskId: string; trial
  */
 export async function runTrialInTempDir(
   task: Task,
-  agent: (task: Task, dir: string) => Promise<{ turns: number; tokens: number }>,
+  agent: (task: Task, dir: string) => Promise<{ turns: number; tokens: number; costUsd?: number }>,
 ): Promise<TrialResult> {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), `eval-${task.id}-`));
   const started = performance.now();
   try {
     await task.setup(dir);
-    const { turns, tokens } = await agent(task, dir);
+    const { turns, tokens, costUsd } = await agent(task, dir);
     const graded = await task.grade(dir);
-    return { pass: graded.pass, detail: graded.detail, turns, tokens, ms: Math.round(performance.now() - started) };
+    return { pass: graded.pass, detail: graded.detail, turns, tokens, costUsd, ms: Math.round(performance.now() - started) };
   } catch (err) {
-    // A crash is a failed trial, not a reason to lose the other results.
-    return { pass: false, detail: `error: ${String(err)}`, turns: 0, tokens: 0, ms: Math.round(performance.now() - started) };
+    // A crash is not the agent failing the task, and not a reason to lose the other results. Record it apart:
+    // counting a 429 as a failure would lower the pass rate and drag tokens/turns toward zero.
+    return { pass: false, error: true, detail: `error: ${String(err)}`, turns: 0, tokens: 0, ms: Math.round(performance.now() - started) };
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -58,17 +60,20 @@ export async function runEval(opts: {
   return records;
 }
 
-export function summarize(records: TrialRecord[]) {
+export function summarize(all: TrialRecord[]) {
+  const records = all.filter((r) => !r.error); // only graded trials; errors are reported separately
   const n = records.length;
   const passes = records.filter((r) => r.pass).length;
   const mean = (f: (r: TrialRecord) => number) => (n ? records.reduce((s, r) => s + f(r), 0) / n : 0);
   const taskIds = [...new Set(records.map((r) => r.taskId))];
   return {
     n,
+    errors: all.length - n,
     passes,
     passRate: n ? passes / n : 0,
     ci: wilson(passes, n),
     meanTokens: mean((r) => r.tokens),
+    meanCostUsd: mean((r) => r.costUsd ?? 0),
     meanTurns: mean((r) => r.turns),
     meanMs: mean((r) => r.ms),
     perTask: taskIds.map((taskId) => {

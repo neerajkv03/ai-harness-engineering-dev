@@ -14,7 +14,7 @@ const memory = betaMemoryTool(backend);
 
 const runner = client.beta.messages.toolRunner({
   model: "claude-opus-5-5",
-  max_tokens: 1024,
+  max_tokens: 16000,
   messages: [{ role: "user", content: "Remember that customer Acme Corp prefers email follow-ups." }],
   tools: [memory],
   max_iterations: 10, // always cap the loop

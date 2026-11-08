@@ -24,7 +24,7 @@ const searchOrders: Anthropic.Tool = {
         enum: ["pending", "shipped", "delivered", "cancelled"], // an enum, not free text
         description: "Order status. Omit to include every status.",
       },
-      created_after: { type: "string", description: "ISO date YYYY-MM-DD. Only orders created on or after this date." },
+      created_after: { type: "string", format: "date", description: "ISO date YYYY-MM-DD. Only orders created on or after this date." }, // strict mode enforces "date"
       page: { type: "integer", description: "1-based page number. Default 1." },
       response_format: {
         type: "string",
@@ -39,7 +39,7 @@ const searchOrders: Anthropic.Tool = {
 
 const response = await client.messages.create({
   model: MODEL,
-  max_tokens: 1024,
+  max_tokens: 16000,
   tools: [searchOrders],
   messages: [{ role: "user", content: "Where is my package? I ordered it a couple of weeks ago, around 2026-10-20." }],
 });

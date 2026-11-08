@@ -7,7 +7,7 @@ const MODEL = "claude-opus-5-5";
 
 const stream = client.messages.stream({
   model: MODEL,
-  max_tokens: 2048,
+  max_tokens: 16000,
   messages: [{ role: "user", content: "Explain what a closure is in JavaScript in 4 sentences." }],
 });
 

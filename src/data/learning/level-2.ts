@@ -45,21 +45,29 @@ export const level2: Topic = {
         },
         {
           type: "table",
-          headers: ["Part", "What it holds", "How it grows"],
+          headers: ["Part", "What it holds", "How it grows", "Rough size"],
           rows: [
-            ["System prompt", "Identity, rules, environment details", "Small and stable; grows when you add rules"],
-            ["Context files", "`AGENTS.md` / `CLAUDE.md` content", "Grows with your project instructions"],
-            ["Tool definitions", "Name, description and schema of every tool", "Grows with every tool you enable, and is sent every turn"],
-            ["Skill descriptions", "One line per skill; bodies load on demand", "Grows slowly with the number of skills"],
-            ["History", "Your messages and the model's replies", "Grows every turn"],
-            ["Tool results", "File contents, command output, search hits", "Usually the biggest and fastest-growing part"],
+            ["System prompt", "Identity, rules, environment details", "Small and stable; grows when you add rules", "1K to 5K tokens"],
+            ["Context files", "`AGENTS.md` / `CLAUDE.md` content", "Grows with your project instructions", "A few hundred to a few thousand"],
+            ["Tool definitions", "Name, description and schema of every tool", "Grows with every tool you enable, and is sent every turn", "Roughly 100 to 500 per tool, plus a few hundred the API adds when any tool is present"],
+            ["Skill descriptions", "One line per skill; bodies load on demand", "Grows slowly with the number of skills", "About 100 per skill"],
+            ["History", "Your messages and the model's replies", "Grows every turn", "Unbounded until you compact"],
+            ["Tool results", "File contents, command output, search hits", "Usually the biggest and fastest-growing part", "One file read can be thousands; Pi caps a read at 2,000 lines or 50 KB"],
+          ],
+        },
+        {
+          type: "section",
+          title: "Set a budget per part",
+          body: [
+            "Measuring tells you where tokens go; a budget decides where they may go. Treat the fixed parts (system prompt, context files, tools, skill lines) as overhead paid on every turn, and keep them to a small slice of the window, a few percent, so the rest is free for the task. Cap every tool result at the tool (truncate with a pointer to the rest, as Pi does) rather than hoping the model reads selectively. And decide in advance when history gets compacted (2.2).",
+            "When you must cut, cut in this order: tool results the agent has already acted on, then old history (summarize it), then rarely used tools, and only last the rules in the system prompt.",
           ],
         },
         {
           type: "section",
           title: "Measure it",
           body: [
-            "You cannot manage a budget you cannot see. `countTokens` prices a request without running the model, so you can measure each part separately. The example builds a small request and prints how many tokens each part uses.",
+            "You cannot manage a budget you cannot see. `countTokens` counts the tokens of a request without running the model, so you can measure each part separately. The example builds a small request and prints how many tokens each part uses.",
           ],
         },
         { type: "code", language: "ts", filename: "examples/level-2/01-inspect-context.ts", code: inspectContext },
@@ -78,16 +86,25 @@ export const level2: Topic = {
           ],
         },
         {
+          type: "section",
+          title: "Progressive disclosure",
+          body: [
+            "Skills apply the same idea to instructions. Pi sends only a short description of each skill in every request and loads the full instructions on demand, when the model decides a skill is relevant. Level 3 builds one.",
+          ],
+        },
+        {
           type: "example",
           title: "Real-life example",
           context: "React",
           text: "This is lazy-loading routes. You do not ship every page in the first bundle; you ship a small shell and load each route when the user opens it. Preloading a whole repository into the prompt is the same mistake as bundling the whole app up front.",
         },
         {
-          type: "section",
-          title: "Progressive disclosure",
-          body: [
-            "Skills apply the same idea to instructions. Pi sends only a short description of each skill in every request and loads the full instructions on demand, when the model decides a skill is relevant. Level 3 builds one.",
+          type: "steps",
+          title: "Try it",
+          items: [
+            "Run `01-inspect-context.ts`. Which part of the request is largest? Was that your guess?",
+            "Add two more tools to it and run it again. How much did the tool definitions grow?",
+            "Write down a token budget for your own agent: system prompt, tools, history cap, and a per-result cap.",
           ],
         },
         {
@@ -124,6 +141,7 @@ export const level2: Topic = {
           body: [
             "Compaction takes a conversation nearing its limit, summarizes it, and starts a new window from the summary. Anthropic calls it the first lever of context engineering. The hard part is choosing what to keep: overly aggressive compaction can drop a detail whose importance only shows up later.",
             "Pi's summaries show what a good one contains: Goal, Constraints and Preferences, Progress (done, in progress, blocked), Key Decisions, Next Steps, and Critical Context. The example below does it by hand with a prompt asking for similar headings, and keeps the last question and answer word for word.",
+            "One catch on current models: replies carry `thinking` blocks, and each is tied to the exact history it was produced with. Once a summary replaces the turns before a kept reply, replaying its thinking block counts as an edited history and the API rejects it. Keep only the text and tool calls of the turns you retain, as the example does, or compact everything and keep no tail at all, which Anthropic recommends as the simplest shape.",
           ],
         },
         { type: "code", language: "ts", filename: "examples/level-2/02-manual-compaction.ts", code: manualCompaction },
@@ -142,7 +160,7 @@ export const level2: Topic = {
             ["Code you write", "A loop that requests the summary and swaps it in", "One extra parameter on your normal request"],
             ["How you ask", "Top-level `compaction: { type: \"summarize\" }`", "`context_management.edits: [{ type: \"compact_20260112\" }]`"],
             ["Beta header", "`compact-2026-09-04`", "`compact-2026-01-12`"],
-            ["Choose it when", "You need to control the timing, or keep recent turns word for word", "You want the API to manage it with minimal code"],
+            ["Choose it when", "You need to control the timing (the API can also keep the most recent turns verbatim; the example below compacts everything)", "You want the API to manage it with minimal code"],
           ],
         },
         {
@@ -231,7 +249,37 @@ context_management: {
           type: "section",
           title: "Checkpoints",
           body: [
-            "A summary lives inside one session. For work that must survive a new session, write progress to a file the next session reads: what is done, what is next, what you decided. A short `PROGRESS.md` mentioned in `AGENTS.md` is enough. Level 5 turns this into a long-running agent.",
+            "A summary lives inside one session. For work that must survive a new session, write progress to a file the next session reads: what is done, what is next, what you decided. A short `PROGRESS.md` mentioned in `AGENTS.md` is enough. Ask the agent to update it at the end of every task, and to read it first at the start of every session. Level 5 turns this into a long-running agent.",
+          ],
+          links: [{ title: "Effective harnesses for long-running agents, Anthropic Engineering", url: "https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents" }],
+        },
+        {
+          type: "code",
+          language: "markdown",
+          filename: "PROGRESS.md",
+          code: `# Progress
+## Goal
+Add pagination to GET /users (limit 20, max 100, returns { items, total }).
+## Done
+- Query params parsed and validated in src/routes/users.ts
+## Next
+- Return total from the count query; add tests for limit > 100
+## Decisions
+- Offset pagination, not cursors: the table is small and sorted by id`,
+        },
+        {
+          type: "example",
+          title: "Real-life example",
+          context: "Meetings",
+          text: "Compaction is meeting minutes. Nobody replays a two-hour recording before the next meeting; they read the minutes: what was decided, who does what next. Bad minutes lose the one detail that mattered, and good ones are written with the next meeting in mind. A checkpoint file is the minutes you pin to the project wiki, so even a new team member can pick up.",
+        },
+        {
+          type: "steps",
+          title: "Try it",
+          items: [
+            "Run `02-manual-compaction.ts` and read the summary it prints. Is every decision from the conversation still there?",
+            "In Pi, run `/compact keep the decisions about the database` in a long session, then ask about an early decision.",
+            "Write a `PROGRESS.md` for something you are working on now, using the template above.",
           ],
         },
         {
@@ -287,7 +335,7 @@ context_management: {
           type: "section",
           title: "Branch summaries",
           body: [
-            "When you leave a branch, Pi can summarize it and attach the summary to the branch you move to. You keep what the abandoned path learned without carrying every message of it.",
+            "When you leave a branch with `/tree`, Pi offers to summarize it; say yes and the summary is attached to the branch you move to. You keep what the abandoned path learned without carrying every message of it.",
           ],
         },
         {
@@ -309,13 +357,21 @@ context_management: {
           type: "note",
           variant: "tip",
           title: "Tip",
-          text: "Branches that share a long prefix can also share prompt-cache hits, because caching matches on the prefix. Very short prefixes fall under the minimum cacheable size and get no benefit.",
+          text: "Branches that share a long prefix can also share prompt-cache hits, because caching matches on the prefix, but only if a `cache_control` breakpoint sits on that shared prefix (Level 6). The example sets none, and its trunk is below the minimum cacheable size anyway.",
         },
         {
           type: "example",
           title: "Real-life example",
           context: "Git",
           text: "It is `git branch`. You try an idea on a branch, merge the winner, and delete the rest. You would not try three refactors by committing all of them to main and reverting two.",
+        },
+        {
+          type: "steps",
+          title: "Try it",
+          items: [
+            "Run `05-fork-history.ts` and confirm neither branch mentions the other's choice.",
+            "In Pi, ask for two different approaches to one change. Use `/tree` to go back and try the second, and accept the branch summary.",
+          ],
         },
         {
           type: "section",
@@ -380,7 +436,8 @@ context_management: {
           type: "section",
           title: "Memory hygiene",
           body: [
-            "Memory that is never cleaned becomes a liability. Overwrite by name so you do not accumulate duplicates, as the example does. Expire facts that were only true for a while. And verify before acting: a remembered file path may no longer exist, and a remembered preference may have changed.",
+            "Memory that is never cleaned becomes a liability. Overwrite by name so you do not accumulate duplicates, as the example does. Expire facts that were only true for a while: write an `updated: 2026-11-08` line into each fact, and have the agent re-check or delete facts older than, say, 90 days. And verify before acting: a remembered file path may no longer exist, and a remembered preference may have changed.",
+            "Mind the cache, too. The example puts the index in the system prompt, so every change to memory changes the prompt prefix and the next request pays full price to rebuild the cache. Batch memory writes, or load the index as the first user message instead of the system prompt, so the stable part stays cached.",
           ],
         },
         {
@@ -394,6 +451,15 @@ context_management: {
           title: "Real-life example",
           context: "Team",
           text: "A team wiki and a Slack channel are two memory tiers. The wiki is curated long-term memory: small, indexed, kept current. Slack is noisy short-term memory that is fine for today and wrong a year later. Agents need both, and need to know which is which.",
+        },
+        {
+          type: "steps",
+          title: "Try it",
+          items: [
+            "Run `06-file-memory.ts` twice. On the second run, check the model uses the memory from the first.",
+            "Ask it to remember a fact with a newline in the summary, and confirm the tool rejects it.",
+            "Add an `updated:` line to one memory file and write the rule that would expire it.",
+          ],
         },
         {
           type: "section",
@@ -469,6 +535,21 @@ context_management: {
           variant: "tip",
           title: "Tip",
           text: "If you have typed the same instruction three times, make it a template.",
+        },
+        {
+          type: "example",
+          title: "Real-life example",
+          context: "npm",
+          text: "A prompt template is an npm script. You stop typing `vitest run --coverage --reporter=dot` and type `npm test`. The command is short, the team shares it, and nobody forgets a flag. A skill is closer to a CLI tool with its own docs and files.",
+        },
+        {
+          type: "steps",
+          title: "Try it",
+          items: [
+            "Save the `/review` template above to `~/.pi/agent/prompts/review.md`, run `/reload`, then stage a change and run `/review`.",
+            "Add an argument: `/review \"API compatibility\"` should focus the review. Use `$1` in the template.",
+            "Turn one instruction you typed three times this week into a template.",
+          ],
         },
         {
           type: "section",

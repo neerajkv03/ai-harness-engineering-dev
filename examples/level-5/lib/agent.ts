@@ -16,7 +16,8 @@ export type Caller = (req: {
   tools: Anthropic.Tool[];
 }) => Promise<Anthropic.Message>;
 
-export function anthropicCaller(model = "claude-opus-5-5", maxTokens = 4096): Caller {
+// 16000: thinking is always on for Claude Opus 5.5 and counts toward max_tokens. Too low a limit cuts replies off.
+export function anthropicCaller(model = "claude-opus-5-5", maxTokens = 16000): Caller {
   const client = new Anthropic();
   return (req) =>
     client.messages.create({
@@ -32,9 +33,12 @@ export type RunResult = {
   text: string;
   turns: number;
   messages: Anthropic.MessageParam[];
-  inputTokens: number;
+  inputTokens: number; // uncached input, as usage.input_tokens reports it
   outputTokens: number;
-  finished: boolean; // false when the loop hit maxTurns without a final answer
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  finished: boolean; // true only for a complete answer (end_turn)
+  stopReason?: string; // why an unfinished run stopped: "max_turns", "max_tokens", "refusal"...
 };
 
 const textOf = (m: Anthropic.Message): string =>
@@ -54,15 +58,21 @@ export async function runAgent(opts: {
   const toolDefs: Anthropic.Tool[] = tools.map(({ name, description, input_schema }) => ({ name, description, input_schema }));
   let inputTokens = 0;
   let outputTokens = 0;
+  let cacheReadTokens = 0;
+  let cacheWriteTokens = 0;
 
   for (let turn = 1; turn <= maxTurns; turn++) {
     const res = await call({ system, messages, tools: toolDefs });
     inputTokens += res.usage.input_tokens;
     outputTokens += res.usage.output_tokens;
+    cacheReadTokens += res.usage.cache_read_input_tokens ?? 0;
+    cacheWriteTokens += res.usage.cache_creation_input_tokens ?? 0;
     messages.push({ role: "assistant", content: res.content });
 
     if (res.stop_reason !== "tool_use") {
-      return { text: textOf(res), turns: turn, messages, inputTokens, outputTokens, finished: true };
+      // Only end_turn is an answer. A max_tokens reply was cut off mid-thought; a refusal declined the task.
+      const finished = res.stop_reason === "end_turn" || res.stop_reason === "stop_sequence";
+      return { text: textOf(res), turns: turn, messages, inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, finished, ...(!finished && { stopReason: String(res.stop_reason) }) };
     }
 
     const results: Anthropic.ToolResultBlockParam[] = [];
@@ -80,7 +90,7 @@ export async function runAgent(opts: {
     }
     messages.push({ role: "user", content: results });
   }
-  return { text: "", turns: maxTurns, messages, inputTokens, outputTokens, finished: false };
+  return { text: "", turns: maxTurns, messages, inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, finished: false, stopReason: "max_turns" };
 }
 
 /**
@@ -111,7 +121,7 @@ export function delegateTool(opts: {
       const { task } = Input.parse(input);
       const result = await runAgent({ system: opts.system, task, tools: opts.tools, call: opts.call, maxTurns: opts.maxTurns ?? 8 });
       opts.onResult?.(result);
-      return result.finished ? result.text : "The helper ran out of turns before finishing. Narrow the task and try again.";
+      return result.finished ? result.text : `The helper stopped before finishing (${result.stopReason}). Narrow the task and try again.`;
     },
   };
 }

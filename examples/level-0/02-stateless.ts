@@ -14,7 +14,7 @@ const textOf = (m: Anthropic.Message): string =>
 // 1. Tell the model something.
 const first = await client.messages.create({
   model: MODEL,
-  max_tokens: 1024,
+  max_tokens: 16000,
   messages: [{ role: "user", content: "My name is Alice. Reply with one short sentence." }],
 });
 console.log("turn 1:", textOf(first));
@@ -22,16 +22,18 @@ console.log("turn 1:", textOf(first));
 // 2. Ask in a NEW request with no history: the model cannot know.
 const forgetful = await client.messages.create({
   model: MODEL,
-  max_tokens: 1024,
+  max_tokens: 16000,
   messages: [{ role: "user", content: "What is my name? If you do not know, say so." }],
 });
 console.log("no history:", textOf(forgetful));
 
 // 3. Fix: resend the whole conversation so far, plus the new question.
+// Send the assistant turn back exactly as it came (`first.content`), not just its text: the reply also holds
+// thinking blocks, and current models reject a history whose earlier turns were rebuilt or edited.
 const history: Anthropic.MessageParam[] = [
   { role: "user", content: "My name is Alice. Reply with one short sentence." },
-  { role: "assistant", content: textOf(first) },
+  { role: "assistant", content: first.content },
   { role: "user", content: "What is my name?" },
 ];
-const remembers = await client.messages.create({ model: MODEL, max_tokens: 1024, messages: history });
+const remembers = await client.messages.create({ model: MODEL, max_tokens: 16000, messages: history });
 console.log("with history:", textOf(remembers));

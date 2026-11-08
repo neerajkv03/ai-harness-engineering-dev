@@ -49,6 +49,20 @@ test("M1 loop: the turn cap stops a runaway agent", async () => {
   assert.equal(call.calls.length, 3);
 });
 
+test("M1 loop: max_tokens and refusal are not a finished answer; pause_turn continues", async () => {
+  for (const stop of ["max_tokens", "refusal"]) {
+    const reply = { ...say("partial"), stop_reason: stop } as ReturnType<typeof say>;
+    const r = await runLoop({ system: "s", messages: [{ role: "user", content: "go" }], call: script([reply]), tools: [] });
+    assert.equal(r.finished, false, stop);
+    assert.equal(r.stopReason, stop);
+  }
+  // pause_turn means "send it back and I will continue", so the loop asks again instead of stopping.
+  const paused = { ...say("working"), stop_reason: "pause_turn" } as ReturnType<typeof say>;
+  const r = await runLoop({ system: "s", messages: [{ role: "user", content: "go" }], call: script([paused, say("done")]), tools: [] });
+  assert.equal(r.text, "done");
+  assert.equal(r.finished, true);
+});
+
 test("M1 loop: an unknown tool or a failing tool becomes an error result and the loop continues", async () => {
   const call = script([use({ name: "nope", input: {} }, { name: "read", input: { path: "missing.txt" } }), say("I could not do that.")]);
   const r = await runLoop({ system: "s", messages: [{ role: "user", content: "go" }], call, tools: createTools(project()) });
@@ -162,6 +176,21 @@ test("M4 compaction: it never cuts between a tool call and its result", async ()
   assert.ok(out.slice(2).some((m) => Array.isArray(m.content) && m.content.some((b) => b.type === "tool_result")), "and so is its result");
 });
 
+test("M4 compaction: thinking blocks are dropped from the kept tail (they were made with the full history; replaying them after a summary is a 400)", async () => {
+  const thinking = { type: "thinking", thinking: "", signature: "sig" } as const;
+  const messages: Message[] = [
+    ...longHistory(6),
+    { role: "user", content: "last question" },
+    { role: "assistant", content: [thinking, { type: "tool_use", id: "t9", name: "read", input: {} }] },
+    { role: "user", content: [{ type: "tool_result", tool_use_id: "t9", content: "data" }] },
+    { role: "assistant", content: [thinking, { type: "text", text: "final" }] },
+  ];
+  const out = await compactIfNeeded({ messages, call: script([say("summary")]), thresholdTokens: 100, keepRecent: 4 });
+  const kept = out.slice(2).flatMap((m) => (Array.isArray(m.content) ? m.content : []));
+  assert.ok(!kept.some((b) => b.type === "thinking" || b.type === "redacted_thinking"), "no thinking block survives in the tail");
+  assert.ok(kept.some((b) => b.type === "tool_use") && kept.some((b) => b.type === "text"), "text and tool calls stay");
+});
+
 test("M4 compaction: a second compaction MERGES into the previous summary instead of starting over", async () => {
   const first = await compactIfNeeded({ messages: longHistory(10), call: script([say("EARLY DECISION: use Postgres.")]), thresholdTokens: 100, keepRecent: 4 });
   const more = [...first, ...longHistory(8)];
@@ -261,6 +290,11 @@ test("M8 tracing: every model call and tool call is one line in a JSONL file, an
   assert.deepEqual(lines.map((l) => l.type), ["model", "tool", "tool", "model"]);
   assert.equal(lines[2].ok, false);
   assert.deepEqual(summarizeTrace(file), { turns: 2, toolCalls: 2, toolErrors: 1, inputTokens: 400, outputTokens: 60 });
+  // Same field names as Level 6's TraceEvent, so Level 6's summarizer and analyzer can read this file too.
+  assert.deepEqual(Object.keys(lines[0].usage).sort(), ["cacheRead", "cacheWrite", "input", "output"]);
+  assert.equal(lines[1].turn, 1, "a tool line carries the turn that requested it");
+  assert.equal(lines[1].outputChars, 1);
+  assert.equal(lines[1].truncated, false);
 });
 
 // ───────────────────────── M9: everything together ─────────────────────────

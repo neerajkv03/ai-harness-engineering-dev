@@ -11,10 +11,14 @@ docker build -t pi-sandbox -f "$(dirname "$0")/Dockerfile.pi" "$(dirname "$0")"
 #    -v "$PWD:/workspace"      the ONLY host folder the container can see (read-write: Pi can change these files).
 #    -v pi-agent-home:...      a named volume: Pi's settings and sessions live in the container, not in your real ~/.pi/agent.
 #    Do NOT mount your host ~/.pi/agent: that would expose your credentials and sessions.
+#    --user                    run as YOUR user id, not root: files Pi writes in the workspace stay yours on Linux,
+#                              and a breakout lands as an ordinary user. HOME points at the volume so Pi can write there.
 docker run --rm -it \
+  --user "$(id -u):$(id -g)" \
+  -e HOME=/home/pi \
   -e ANTHROPIC_API_KEY \
   -v "$PWD:/workspace" \
-  -v pi-agent-home:/root/.pi/agent \
+  -v pi-agent-home:/home/pi/.pi/agent \
   pi-sandbox
 
 # Variants:

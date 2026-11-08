@@ -9,21 +9,31 @@ import { z } from "zod";
 
 // ── The model, behind one small interface ────────────────────────────
 
-/** Ask for a value of a given shape. Everything else about the model is hidden, so a fake can stand in. */
-export type StepModel = <S extends z.ZodTypeAny>(req: { schema: S; prompt: string; attempt: number }) => Promise<unknown>;
+/**
+ * Ask for a value of a given shape. Everything else about the model is hidden, so a fake can stand in.
+ * `id` names the model in cache keys, so answers cached from one model (or a fake) are never served for another.
+ */
+export type StepModel = (<S extends z.ZodTypeAny>(req: { schema: S; prompt: string; attempt: number }) => Promise<unknown>) & { id?: string };
 
 export function claudeStepModel(model = "claude-opus-5-5"): StepModel {
   const client = new Anthropic();
-  return async ({ schema, prompt }) => {
-    // Structured outputs: the API constrains the reply to the schema. We still validate below, at OUR boundary.
-    const res = await client.messages.parse({
+  const ask: StepModel = async ({ schema, prompt }) => {
+    // Structured outputs: the API constrains the reply to the schema's JSON shape. We parse the JSON ourselves and
+    // leave validation to typedStep, so a refinement the API cannot enforce (.min, .email) becomes a retry, not a crash.
+    const res = await client.messages.create({
       model,
-      max_tokens: 2048,
+      max_tokens: 16000, // thinking is always on for Opus 5.5 and counts toward this limit
       messages: [{ role: "user", content: prompt }],
       output_config: { format: zodOutputFormat(schema as never) },
     });
-    return res.parsed_output;
+    const text = res.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");
+    try {
+      return JSON.parse(text);
+    } catch {
+      return text; // truncated or refused: not valid JSON, so the schema check rejects it and typedStep retries
+    }
   };
+  return Object.assign(ask, { id: model });
 }
 
 // ── A typed step: the model's output must satisfy the schema, or the step fails loudly ──
@@ -105,7 +115,9 @@ export const STEP_VERSIONS: { extract: string; review: string } = { extract: "v1
 
 export async function triageTicket(ticket: string, deps: { model: StepModel; cache: StepCache; versions?: typeof STEP_VERSIONS }) {
   const { model, cache } = deps;
-  const v = deps.versions ?? STEP_VERSIONS;
+  const versions = deps.versions ?? STEP_VERSIONS;
+  // The model is part of what a step depends on: same prompt, different model, different answer.
+  const v = { extract: `${versions.extract}@${model.id ?? "model"}`, review: `${versions.review}@${model.id ?? "model"}` };
 
   // Step 1 (model): free text in, a validated object out.
   const extracted = await cache.run("extract", v.extract, ticket, () =>

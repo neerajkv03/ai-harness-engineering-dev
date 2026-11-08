@@ -23,9 +23,14 @@ dana.okafor@northwind.example | +1 555 0100
 // parse() sends the schema as output_config.format and validates the reply against it.
 const response = await client.messages.parse({
   model: MODEL,
-  max_tokens: 1024,
+  max_tokens: 16000,
   messages: [{ role: "user", content: `Extract the contact from this email signature:\n${signature}` }],
   output_config: { format: zodOutputFormat(Contact) },
 });
 
-console.log(response.parsed_output); // typed as { name: string; email: string; company: string } | null
+// parsed_output is typed `... | null`: null when the reply was cut off (max_tokens) or declined (refusal).
+if (response.stop_reason !== "end_turn" || !response.parsed_output) {
+  throw new Error(`no structured output (stop_reason: ${response.stop_reason})`);
+}
+const contact = response.parsed_output; // { name: string; email: string; company: string }
+console.log(contact);

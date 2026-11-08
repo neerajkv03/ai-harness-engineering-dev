@@ -70,6 +70,15 @@ test("pipeline: gives up after maxFixes and never calls the reviewer", async () 
   assert.equal(reviewed, 0);
 });
 
+test("runGate keeps secrets out of the code it runs", async () => {
+  process.env.ANTHROPIC_API_KEY ??= "sk-ant-test-only";
+  const probe = ["-e", "console.log(process.env.ANTHROPIC_API_KEY ?? 'none', process.env.EXTRA ?? 'none')"];
+  const r = await runGate(process.execPath, probe, process.cwd());
+  assert.equal(r.output, "none none");
+  const withExtra = await runGate(process.execPath, probe, process.cwd(), 30_000, { EXTRA: "yes" });
+  assert.equal(withExtra.output, "none yes");
+});
+
 test("runGate reports pass and fail from a real command", async () => {
   const ok = await runGate(process.execPath, ["-e", "process.exit(0)"], process.cwd());
   assert.equal(ok.ok, true);

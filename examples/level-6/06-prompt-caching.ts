@@ -12,9 +12,11 @@ const manual = Array.from({ length: 120 }, (_, i) => `Rule ${i + 1}: when a supp
 async function ask(label: string, system: string, question: string) {
   const res = await client.messages.create({
     model: MODEL,
-    max_tokens: 100,
-    cache_control: { type: "ephemeral" }, // cache the prefix up to the last cacheable block, with the default 5-minute lifetime
-    system,
+    max_tokens: 2048, // room for thinking (always on for Opus 5.5) plus a one-sentence answer
+    output_config: { effort: "low" },
+    // The breakpoint goes on the LAST block that is the same every call: the system prompt. A breakpoint after the
+    // question (where top-level automatic caching would put it here) caches a prefix no later call repeats.
+    system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }], // default 5-minute lifetime
     messages: [{ role: "user", content: question }],
   });
   const u = res.usage;

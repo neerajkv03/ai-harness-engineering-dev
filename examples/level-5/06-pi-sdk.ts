@@ -1,9 +1,19 @@
 // Lesson 5.4: embed Pi in your own program with the SDK. No terminal UI: you prompt it and subscribe to events.
 // Needs @earendil-works/pi-coding-agent installed and a provider key (for example ANTHROPIC_API_KEY).
 // Run: bun run examples/level-5/06-pi-sdk.ts
-import { createAgentSession, SessionManager } from "@earendil-works/pi-coding-agent";
+import { createAgentSession, ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
+
+// Pick the model in code. Without `model`, the session uses whatever default the machine's settings name.
+const modelRuntime = await ModelRuntime.create();
+const model = modelRuntime.getModel("anthropic", "claude-opus-5-5");
+if (!model) throw new Error("claude-opus-5-5 not found: check your Pi version and provider setup");
 
 const { session } = await createAgentSession({
+  modelRuntime,
+  model,
+  // Without `tools`, the SDK enables the defaults: read, bash, edit, write. This job only needs to look,
+  // so it gets read-only tools. (To keep bash, add the Level 4 guard as an extension factory.)
+  tools: ["read", "grep", "find", "ls"],
   sessionManager: SessionManager.inMemory(), // no session file written; this run leaves nothing behind
 });
 

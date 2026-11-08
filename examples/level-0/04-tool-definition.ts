@@ -24,7 +24,7 @@ const getWeather: Anthropic.Tool = {
 
 const response = await client.messages.create({
   model: MODEL,
-  max_tokens: 1024,
+  max_tokens: 16000,
   tools: [getWeather],
   messages: [{ role: "user", content: "How warm is it in Paris, in celsius?" }],
 });

@@ -119,6 +119,6 @@ Lessons in `src/data/learning/level-7.ts`; code in `examples/level-7/`. 63 Level
 - **7.2** Replaced the planned `01-propose-fix.ts` with a full guarded loop: `lib/evolution.ts` + `evolution-scenario.ts` + `02-harness-evolution.ts`. Stages: guardrail (protected files, schema, prediction), no_improvement, regression, prediction, human approval. The model is simulated, so it runs free and offline. AHE and Harness-R1 are summarized from their abstracts only.
 - **7.3** Playwright aria-ref tools (`lib/browser-tools.ts`, `03-browser-agent.ts`) with a host allow-list plus a network-layer block. Anthropic's `browser_toolset_20260801` is the same design with a hosted contract. Not run against the live API.
 - **7.4** `lib/workflow.ts` (typed steps, bounded retry, `StepError`, hash-keyed disk cache), `04-typed-workflow.ts --fake`, `05-step-cache-demo.ts`.
-- **7.5** Capstone is 467 lines (plan target: under 1000), 9 milestones, 24 tests. `bench.ts` compares with Pi using the same prompts; it is type-checked only.
+- **7.5** Capstone is 488 lines (plan target: under 1000), 9 milestones, 26 tests, one example skill (`capstone/skills/fix-failing-test/`). `bench.ts` compares with Pi using the same prompts and model, reports tokens and cost for both, and keeps every transcript; it is type-checked only.
 
 Not verified end to end: scripts needing `ANTHROPIC_API_KEY` (`03-browser-agent`, `04-typed-workflow` without `--fake`, `capstone/cli.ts`, `bench.ts`) and the Pi side of the benchmark.

@@ -6,7 +6,7 @@ const client = new Anthropic();
 
 const response = await client.messages.create({
   model: "claude-opus-5-5",
-  max_tokens: 2048,
+  max_tokens: 16000,
   messages: [{ role: "user", content: "What is the weather in San Francisco?" }],
   tools: [
     // The search tool itself must NOT be deferred. At least one tool has to be non-deferred.
@@ -19,7 +19,7 @@ const response = await client.messages.create({
         properties: { location: { type: "string" }, unit: { type: "string", enum: ["celsius", "fahrenheit"] } },
         required: ["location"],
       },
-      defer_loading: true, // only the name is visible up front; the full definition loads when searched for
+      defer_loading: true, // not in the context at all until a search returns it; then its full definition loads
     },
     {
       name: "search_files",

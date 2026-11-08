@@ -12,7 +12,8 @@ const INDEX = path.join(DIR, "INDEX.md");
 
 // Names become filenames, so allow only a safe shape. Never build a path from raw model output.
 const Name = z.string().regex(/^[a-z0-9-]{1,40}$/);
-const RememberInput = z.object({ name: Name, summary: z.string().max(120), fact: z.string().max(2000) });
+// The summary becomes one line of INDEX.md, so a newline in it would corrupt the index.
+const RememberInput = z.object({ name: Name, summary: z.string().max(120).regex(/^[^\r\n]*$/, "summary must be one line"), fact: z.string().max(2000) });
 const RecallInput = z.object({ name: Name });
 
 const tools: Anthropic.Tool[] = [
@@ -60,7 +61,7 @@ async function session(userText: string): Promise<string> {
 
   const messages: Anthropic.MessageParam[] = [{ role: "user", content: userText }];
   for (let turn = 0; turn < 6; turn++) {
-    const res = await client.messages.create({ model: MODEL, max_tokens: 1024, system, tools, messages });
+    const res = await client.messages.create({ model: MODEL, max_tokens: 16000, system, tools, messages });
     messages.push({ role: "assistant", content: res.content });
     if (res.stop_reason !== "tool_use") {
       return res.content.find((b): b is Anthropic.TextBlock => b.type === "text")?.text ?? "";

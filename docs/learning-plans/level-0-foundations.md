@@ -103,7 +103,7 @@ Description: "What you already know, plus the gaps harness work exposes."
 | 3 | steps | Clone examples → run `01-count-tokens.ts` → see output. |
 | 4 | note (danger) | Never commit API keys. Use `.env` (gitignored) and never paste a key into a prompt. |
 | 5 | section | Shell fluency: agents live in the terminal. `grep`, `find`, pipes, exit codes; why the agent's `bash` tool output matters. |
-| 6 | code | `11-shell-tool.ts` — run `git status` via `Bun.spawn`, return stdout / stderr / exit code as a tool result. Preview of Level 3. |
+| 6 | code | `11-shell-tool.ts` — run `git status` via `execFile` from `node:child_process` (works under both Node and Bun; as built), return stdout / stderr / exit code as a tool result. Preview of Level 3. |
 | 7 | section | Further reading |
 
 Sources:

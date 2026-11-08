@@ -2,7 +2,8 @@
 // The loop never edits the live harness itself: it tests the change on a COPY, and a human merges it.
 //   1 measure the current harness   2 analyze the failed traces   3 ask the proposer for ONE change
 //   4 guardrails: reject anything unsafe BEFORE running   5 apply it to a copy and measure again
-//   6 accept only a real win with no regressions, and only if the proposer's own prediction came true   7 stop and ask a human
+//   6 accept only a real win with no regressions, only if the proposer's own prediction came true, and only if the win
+//     holds again on held-out seeds   7 stop and ask a human
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -71,18 +72,20 @@ export async function measure(harnessDir: string, trials: number, baseSeed = 100
   return { rates, outcomes, failedTrace };
 }
 
+const HOLDOUT_SEED = 900_000; // far from the 1000+ seeds used for selection
 const readHarnessFiles = (dir: string) => Object.fromEntries(fs.readdirSync(dir).map((f) => [f, fs.readFileSync(path.join(dir, f), "utf8")]));
 
 // ── One round of evolution ───────────────────────────────────────────
 
 export type Report = {
   status: "rejected" | "ready_for_review" | "merged";
-  stage?: "guardrail" | "no_improvement" | "regression" | "prediction";
+  stage?: "guardrail" | "no_improvement" | "regression" | "prediction" | "holdout";
   reason?: string;
   proposal?: Proposal;
   baseline?: Record<string, number>;
   candidate?: Record<string, number>;
   pValue?: number;
+  holdoutPValue?: number;
   predictionHeld?: boolean;
 };
 
@@ -129,8 +132,15 @@ export async function evolveOnce(opts: {
   const predictionHeld = gain >= proposal.prediction.minImprovement;
   if (!predictionHeld) return { ...common, status: "rejected", stage: "prediction", reason: `predicted at least +${pct(proposal.prediction.minImprovement)} on ${target.id}, measured +${pct(gain)}`, pValue: t.p, predictionHeld };
 
+  // 6d: confirm on held-out seeds. Steps 6a-6c used the same runs to judge the change, so a lucky draw could pass them.
+  // Fresh seeds that no decision has looked at are the honest check. (Tasks stay the same: the scenario has only three.)
+  const holdBase = await measure(opts.harnessDir, trials, HOLDOUT_SEED);
+  const holdCand = await measure(candidateDir, trials, HOLDOUT_SEED);
+  const h = permutationTest(holdBase.outcomes[target.id]!, holdCand.outcomes[target.id]!);
+  if (!(h.diff > 0 && h.p < 0.05)) return { ...common, status: "rejected", stage: "holdout", reason: `${target.id}: the gain did not hold on held-out seeds (p = ${h.p.toFixed(3)})`, pValue: t.p, holdoutPValue: h.p, predictionHeld };
+
   // 7: it earned a human's attention. It does NOT merge itself.
-  const report: Report = { ...common, status: "ready_for_review", pValue: t.p, predictionHeld };
+  const report: Report = { ...common, status: "ready_for_review", pValue: t.p, holdoutPValue: h.p, predictionHeld };
   if (opts.approve && (await opts.approve(report))) {
     fs.writeFileSync(path.join(opts.harnessDir, proposal.file), proposal.content);
     return { ...report, status: "merged" };

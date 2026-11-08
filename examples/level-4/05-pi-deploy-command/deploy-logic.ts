@@ -1,7 +1,7 @@
 // Logic for a /deploy-preview command. Pure functions, so they can be tested without Pi.
 
 // Only environments the command is allowed to touch. "prod" is deliberately not here:
-// a command the agent or a typo can trigger should not be able to reach production.
+// a command that a typo, a script or an RPC client can trigger should not be able to reach production.
 export const ENVIRONMENTS = ["dev", "staging"] as const;
 export type Environment = (typeof ENVIRONMENTS)[number];
 

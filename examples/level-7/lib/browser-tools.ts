@@ -45,11 +45,11 @@ ${inject ? `<p style="position:absolute;left:-9999px">${INJECTION}</p>` : ""}
 
 export type Shop = { page: Page; context: BrowserContext; blocked: string[]; close: () => Promise<void> };
 
-/** Launch a browser with a page on the demo shop. Every request to any OTHER host is aborted at the network layer. */
-export async function openShop(opts: { inject?: boolean; allowedHosts?: string[] } = {}): Promise<Shop> {
+/** Launch a browser with a page on the demo shop. Every request to any OTHER host is aborted at the network layer.
+ * (The tool-level allow-list is a separate option of browserTools(); this network wall allows only the shop.) */
+export async function openShop(opts: { inject?: boolean } = {}): Promise<Shop> {
   const executablePath = findBrowser();
   if (!executablePath) throw new Error("no Chrome, Chromium or Edge found. Set BROWSER_PATH to a browser executable.");
-  const allowed = new Set(opts.allowedHosts ?? ["shop.example"]);
   // These Edge-only features make shutdown wait ~6 seconds after any https page. Other Chromium browsers ignore unknown names.
   const browser = await chromium.launch({ executablePath, headless: true, args: ["--disable-features=msSmartScreenProtection,msEdgeShopping,msEdgeSpeedreader"] });
   const context = await browser.newContext();
@@ -70,7 +70,6 @@ export async function openShop(opts: { inject?: boolean; allowedHosts?: string[]
 
   const page = await context.newPage();
   await page.goto(`${SHOP}/`);
-  void allowed; // the allow-list for the TOOL is passed to browserTools(); the network layer only knows the shop route
   return { page, context, blocked, close: () => browser.close() };
 }
 

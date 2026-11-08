@@ -36,4 +36,4 @@ console.log(`\nturns: ${s.turns}   tool calls: ${s.toolCalls}`);
 console.log(`tokens: ${s.usage.input} in, ${s.usage.output} out   cost on Claude Opus 5.5: $${s.costUsd.toFixed(4)}`);
 console.log(`time in model calls: ${s.modelMs} ms   time in tools: ${s.toolMs} ms`);
 console.log(`slowest tool: ${s.slowestTool?.name} (${s.slowestTool?.ms} ms)`);
-for (const [name, t] of Object.entries(s.byTool)) console.log(`  ${name.padEnd(10)} calls ${t.count}  errors ${t.errors}  total ${t.totalMs.toFixed(0)} ms`);
+for (const [name, t] of Object.entries(s.byTool)) console.log(`  ${name.padEnd(10)} calls ${t.count}  errors ${t.errors}  total ${t.totalMs.toFixed(0)} ms  ~${t.estTokens} tokens of results`);

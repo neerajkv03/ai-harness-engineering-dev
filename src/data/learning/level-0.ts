@@ -59,7 +59,7 @@ export const level0: Topic = {
           type: "section",
           title: "Attention cost and the KV cache",
           body: [
-            "To read your prompt the model compares every token with the others (attention). More tokens means more work, so long prompts cost more and respond slower.",
+            "To read your prompt the model compares every token with the others (attention). That work grows with the square of the length: double the prompt and the attention work roughly quadruples. So long prompts cost more and respond slower.",
             "Providers speed this up by caching the internal state (the KV cache) of a prompt prefix. A repeated prefix is then cheap to reprocess. This is the idea behind prompt caching, covered in Level 6.",
           ],
         },
@@ -69,6 +69,7 @@ export const level0: Topic = {
           body: [
             "Older APIs let you tune randomness with `temperature` (how adventurous the next-token choice is), `top_p` and `top_k` (how many candidate tokens are considered). You may see them in tutorials.",
             "Current Claude models no longer accept them. Instead, `output_config.effort` (`low` to `max`) controls how hard the model thinks, and `stop_sequences` still lets you cut output at a marker string. Run the example to compare token spend at two effort levels.",
+            "Thinking is the other half. On Claude Opus 5.5 the model always reasons before it answers (adaptive thinking: it decides how much), and you cannot switch it off; effort is the only dial, and its default on Opus 5.5 is `medium`. The reasoning comes back as `thinking` blocks in `content`, before the `text` blocks. By default their text is empty (`display: \"omitted\"`), but they are still billed as output tokens and still count toward `max_tokens`. That is why every example here filters `content` for `type === \"text\"`, and why the examples set `max_tokens` to 16000: a small limit can be used up by thinking before any answer is written.",
           ],
         },
         { type: "code", language: "ts", filename: "examples/level-0/03-effort.ts", code: effort },
@@ -76,7 +77,7 @@ export const level0: Topic = {
           type: "note",
           variant: "warning",
           title: "Warning",
-          text: "Sending `temperature`, `top_p` or `top_k` to Claude Opus 4.7 or newer returns a 400 error, even at the default value. Remove them from copied code.",
+          text: "Current Claude models reject `temperature`, `top_p` and `top_k`: Opus and Fable models reject any value, Sonnet 5.5 and Haiku 5.5 reject non-default values, and from API version `2026-10-21` every model rejects them. The current TypeScript SDK no longer even accepts them. Remove them from copied code.",
         },
         {
           type: "section",
@@ -84,12 +85,6 @@ export const level0: Topic = {
           body: [
             "The same prompt can produce different output on different runs, and the model can be confidently wrong. Never treat a model reply like the typed return value of a function. Validate it, test it, or have a human check it, in proportion to what a mistake would cost.",
           ],
-        },
-        {
-          type: "example",
-          title: "Real-life example",
-          context: "Team",
-          text: "A model is like a capable junior developer reading your ticket. It is usually right and sometimes creative in ways you did not ask for, so you review the pull request before it ships.",
         },
         {
           type: "section",
@@ -113,6 +108,21 @@ export const level0: Topic = {
           variant: "info",
           title: "Info",
           text: "Haiku 5.5 prices shown are for prompts up to 100K tokens; longer prompts cost more. Prices change, so confirm on the pricing page.",
+        },
+        {
+          type: "example",
+          title: "Real-life example",
+          context: "Team",
+          text: "A model is like a capable junior developer reading your ticket. It is usually right and sometimes creative in ways you did not ask for, so you review the pull request before it ships.",
+        },
+        {
+          type: "steps",
+          title: "Try it",
+          items: [
+            "Before you run `01-count-tokens.ts`, guess how many tokens its English sentence and its code snippet each take. Run it and compare.",
+            "Run `02-stateless.ts` and point to the line where the model 'forgets'. Then find the line that makes it remember.",
+            "Run `03-effort.ts` and note the output tokens at each effort level. Which answer would you ship?",
+          ],
         },
         {
           type: "section",
@@ -148,6 +158,7 @@ export const level0: Topic = {
           body: [
             "A tool definition has a `name`, a `description` and an `input_schema` written in JSON Schema. If you use Zod or Mongoose, it is the same idea: a declared shape for the input.",
             "The `description` is the documentation the model reads to decide when to call the tool. Write it for a reader who has never seen your code. Setting `strict: true` guarantees the model's input matches the schema.",
+            "The examples still validate the input with Zod. A schema cannot express every rule (\"end date after start date\"), and the same tool may later run without `strict`, as the agent loop in 0.3 does. Validation at your own boundary is cheap insurance.",
           ],
         },
         { type: "code", language: "ts", filename: "examples/level-0/04-tool-definition.ts", code: toolDefinition },
@@ -199,13 +210,13 @@ export const level0: Topic = {
           type: "note",
           variant: "warning",
           title: "Warning",
-          text: "Forcing a tool with `tool_choice` `any` or `tool` returns a 400 error on the newest models.",
+          text: "The exact error you will see: `tool_choice: type \"tool\" and \"any\" are not supported for this model.` If you meet it in copied code, switch to `auto` and name the tool in the prompt.",
         },
         {
           type: "section",
           title: "Structured outputs",
           body: [
-            "If you only want data back, a tool is the wrong shape. Pass a schema in `output_config.format` and the reply is valid JSON matching it. The SDK's `client.messages.parse()` takes a Zod schema and returns a typed, validated object.",
+            "If you only want data back, a tool is the wrong shape. Pass a schema in `output_config.format` and the reply is valid JSON matching it. The SDK's `client.messages.parse()` takes a Zod schema and returns `parsed_output`, a typed, validated object, or `null` when the reply was cut off at `max_tokens` or declined. Check `stop_reason` before you use it.",
           ],
         },
         { type: "code", language: "ts", filename: "examples/level-0/07-structured-output.ts", code: structuredOutput },
@@ -214,6 +225,15 @@ export const level0: Topic = {
           title: "Real-life example",
           context: "API",
           text: "Tool definitions are like an OpenAPI spec for an AI client. The description is your API documentation. A vague description gets the same result as vague API docs: wrong or missing calls.",
+        },
+        {
+          type: "steps",
+          title: "Try it",
+          items: [
+            "Add a second tool to `05-one-tool-round-trip.ts` (for example `get_time`) and ask a question that needs both.",
+            "Make the weather tool in `06-parallel-tools.ts` throw for one city. Confirm the reply still covers the other two.",
+            "Change `07-structured-output.ts` to extract a phone number as well, and check `parsed_output` is typed with it.",
+          ],
         },
         {
           type: "section",
@@ -279,6 +299,7 @@ export const level0: Topic = {
           title: "Streaming",
           body: [
             "A long reply can take many seconds. `client.messages.stream()` emits text as it is generated, much like server-sent events in Express. Call `finalMessage()` to get the complete message once the stream ends, with `stop_reason` and `usage`.",
+            "Partial output needs a plan. Text you have already shown may be followed by `stop_reason: \"max_tokens\"`, so the answer is cut off: mark it as incomplete rather than presenting it as done. A user can cancel, so call `stream.abort()` and discard or label what arrived. And with thinking display omitted, the stream is silent while the model thinks, which looks like a hang: show a \"thinking\" indicator, or set `thinking: { type: \"adaptive\", display: \"summarized\" }` to stream a readable summary.",
           ],
         },
         { type: "code", language: "ts", filename: "examples/level-0/09-streaming.ts", code: streaming },
@@ -287,7 +308,8 @@ export const level0: Topic = {
           title: "When things fail",
           body: [
             "There are two different failures. API errors come from the request itself (bad key, unknown model, rate limit); you handle them with the SDK's typed error classes, checking the most specific class first. The SDK already retries connection errors, 408, 409, 429 and 5xx twice by default.",
-            "Tool errors are different: your tool threw. Do not crash the loop. Return a `tool_result` with `is_error: true` and a message, and the model can adjust and try again.",
+            "Read the class to decide what to do. A 400 (`BadRequestError`) means the request is wrong, for example a removed parameter or an assistant prefill; retrying sends the same broken request, so fix the code. A 429 or a network error is temporary, so retry with backoff.",
+            "Tool errors are different: your tool threw. Do not crash the loop. Catch the error, return a `tool_result` with `is_error: true` and the message, and the model can adjust and try again. A malformed call is the same case: when a tool runs without `strict`, the model can send input that does not match the schema, Zod throws, and that error goes back as `is_error` too. The `08-agent-loop.ts` example does exactly this inside its tool runner.",
           ],
         },
         { type: "code", language: "ts", filename: "examples/level-0/10-errors.ts", code: errors },
@@ -303,6 +325,15 @@ export const level0: Topic = {
           title: "Real-life example",
           context: "Backend",
           text: "Compare an Express middleware chain with an agent loop. In Express your code fixes the order of handlers. In an agent the model chooses the next handler (tool) after seeing the last result, and your loop keeps the chain moving.",
+        },
+        {
+          type: "steps",
+          title: "Try it",
+          items: [
+            "Run `08-agent-loop.ts` on this repo. Count the turns and the tools it called before answering.",
+            "Set `MAX_TURNS` to 2 and run it again. What does the loop do when the cap hits?",
+            "Run `10-errors.ts` and read both messages: which error should you retry, and which should you fix in code?",
+          ],
         },
         {
           type: "section",
@@ -350,8 +381,8 @@ export const level0: Topic = {
           items: [
             "Install Bun from bun.sh.",
             "In this repo, run `bun install`. It installs `@anthropic-ai/sdk` and `zod`.",
-            "Create an API key in the Anthropic Console and put it in your environment as `ANTHROPIC_API_KEY`.",
-            "Run `bun run examples/level-0/01-count-tokens.ts` and read the output.",
+            "Give the SDK credentials. Either create an API key in the Anthropic Console and put it in your environment as `ANTHROPIC_API_KEY`, or run `ant auth login` once: the SDK reads that profile with no environment variable.",
+            "Run `bun run examples/level-0/01-count-tokens.ts` and read the output. Bun loads a `.env` file automatically; plain `node file.ts` does not, so with Node either export the variable or run `node --env-file=.env file.ts`.",
           ],
         },
         {
@@ -371,10 +402,36 @@ export const level0: Topic = {
         { type: "code", language: "ts", filename: "examples/level-0/11-shell-tool.ts", code: shellTool },
         {
           type: "section",
+          title: "Three refreshers",
+          body: [
+            "Tests. Node has a test runner built in, and the later levels use it everywhere. `node --test path/to/file.test.ts` runs a file; a failure prints the test name, the expected and actual values, and the line. Read the first failure, not the last: later ones are often knock-on effects. If you can run `node --test examples/level-5/lib/agent.test.ts` and explain one assertion in it, you are ready.",
+            "Pipes and `sed`. Agents chain small tools, and so will you when you read their logs. `grep -n \"error\" run.log | head -5` shows the first five error lines with line numbers. `sed -n '10,20p' file.ts` prints lines 10 to 20, and `sed -i 's/old/new/' file` edits in place. `cmd1 && cmd2` runs the second only if the first exits 0, which is how exit codes steer a script.",
+            "OpenAPI. An OpenAPI spec describes an HTTP API: paths, methods, parameters and response shapes, with the shapes written in JSON Schema. Tool definitions use the same JSON Schema, so reading `components.schemas` in a spec is the same skill as reading a tool's `input_schema`.",
+          ],
+        },
+        {
+          type: "steps",
+          title: "Try it",
+          items: [
+            "Run `node --test examples/level-5/lib/agent.test.ts`, then break one assertion on purpose and read the failure.",
+            "Run `git status --short | wc -l` and explain what each part of the pipe does.",
+            "Run `11-shell-tool.ts` in a repo with an uncommitted change, then in a clean one. Compare what the model is told.",
+          ],
+        },
+        {
+          type: "example",
+          title: "Real-life example",
+          context: "Onboarding",
+          text: "This lesson is the first-day setup checklist on a new team: laptop, repo access, the test command, the deploy key. Nobody expects you to know the codebase yet, but without the checklist you cannot even start. Every later level assumes these five skills are in place.",
+        },
+        {
+          type: "section",
           title: "Further reading",
           body: [],
           links: [
             { title: "Bun documentation", url: "https://bun.sh/docs" },
+            { title: "Node.js test runner", url: "https://nodejs.org/api/test.html" },
+            { title: "OpenAPI: getting started", url: "https://learn.openapis.org/" },
             { title: "Anthropic TypeScript SDK", url: "https://github.com/anthropics/anthropic-sdk-typescript" },
             { title: "Pro Git book", url: "https://git-scm.com/book" },
             { title: "The Art of Command Line", url: "https://github.com/jlevy/the-art-of-command-line" },

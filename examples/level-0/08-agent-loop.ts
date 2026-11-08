@@ -1,5 +1,6 @@
 // Lesson 0.3: an agent is a while loop around tool calling, with a hard turn cap.
 // Run: bun run examples/level-0/08-agent-loop.ts [folder]   (default: current folder)
+// Cost: each turn resends the files read so far, so a run costs a few cents, more than the other Level 0 examples.
 import Anthropic from "@anthropic-ai/sdk";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -17,6 +18,8 @@ function safePath(rel: string): string {
   return full;
 }
 
+// No `strict: true` here on purpose: the model can send input that does not match the schema (a malformed call).
+// Zod catches it in runTool, and the error goes back to the model as is_error, like any other tool failure.
 const tools: Anthropic.Tool[] = [
   {
     name: "list_files",
@@ -49,7 +52,7 @@ const messages: Anthropic.MessageParam[] = [
 ];
 
 for (let turn = 1; turn <= MAX_TURNS; turn++) {
-  const response = await client.messages.create({ model: MODEL, max_tokens: 4096, tools, messages });
+  const response = await client.messages.create({ model: MODEL, max_tokens: 16000, tools, messages });
   messages.push({ role: "assistant", content: response.content });
 
   if (response.stop_reason !== "tool_use") {
@@ -66,7 +69,7 @@ for (let turn = 1; turn <= MAX_TURNS; turn++) {
     try {
       results.push({ type: "tool_result", tool_use_id: block.id, content: await runTool(block.name, block.input) });
     } catch (err) {
-      // Tell the model what went wrong instead of crashing. It can recover.
+      // A thrown error (bad path, missing file, malformed input from Zod) goes back to the model. It can recover.
       results.push({ type: "tool_result", tool_use_id: block.id, is_error: true, content: String(err) });
     }
   }

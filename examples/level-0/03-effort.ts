@@ -9,7 +9,7 @@ const PROMPT = "A bat and a ball cost $1.10 together. The bat costs $1.00 more t
 for (const effort of ["low", "high"] as const) {
   const response = await client.messages.create({
     model: MODEL,
-    max_tokens: 4096,
+    max_tokens: 16000,
     output_config: { effort },
     messages: [{ role: "user", content: PROMPT }],
   });

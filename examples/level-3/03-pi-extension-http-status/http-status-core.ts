@@ -24,10 +24,12 @@ export function parseUrl(raw: string): URL {
 
 // Note: this lets the model reach any URL your machine can reach, including localhost and internal hosts.
 // Level 4 covers limiting that (allow-lists, egress rules).
-export async function checkStatus(raw: string, fetchImpl: FetchLike = fetch, timeoutMs = 10_000): Promise<StatusResult> {
+// `signal` is the caller's cancel button (Pi passes one to execute). The request stops on cancel OR timeout.
+export async function checkStatus(raw: string, fetchImpl: FetchLike = fetch, timeoutMs = 10_000, signal?: AbortSignal): Promise<StatusResult> {
   const url = parseUrl(raw);
   const started = performance.now();
-  const res = await fetchImpl(url.href, { method: "HEAD", redirect: "manual", signal: AbortSignal.timeout(timeoutMs) });
+  const stop = signal ? AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]) : AbortSignal.timeout(timeoutMs);
+  const res = await fetchImpl(url.href, { method: "HEAD", redirect: "manual", signal: stop });
   return {
     url: url.href,
     status: res.status,

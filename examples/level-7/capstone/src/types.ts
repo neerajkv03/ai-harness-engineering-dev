@@ -20,7 +20,8 @@ export type Hooks = {
   /** Return { block: reason } to stop the tool from running. The model sees the reason as an error. */
   beforeTool?: (call: ToolCall) => void | { block: string } | Promise<void | { block: string }>;
   afterTool?: (call: ToolCall & { output: string; isError: boolean; ms: number }) => void | Promise<void>;
-  afterModel?: (e: { turn: number; usage: { input: number; output: number }; stop: string; ms: number }) => void;
+  afterModel?: (e: { turn: number; usage: { input: number; output: number; cacheRead: number; cacheWrite: number }; stop: string; ms: number }) => void;
 };
 
-export type RunResult = { text: string; turns: number; finished: boolean; messages: Message[] };
+/** `finished` is true only for a complete answer (`end_turn`). `stopReason` says why an unfinished run stopped. */
+export type RunResult = { text: string; turns: number; finished: boolean; stopReason?: string; messages: Message[] };

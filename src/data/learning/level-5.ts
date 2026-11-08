@@ -102,6 +102,20 @@ export const level5: Topic = {
           text: "Project-local agents (`.pi/agents/*.md`) are prompts the repository controls, and they can tell the model to run commands. By default the extension loads only your own user-level agents. Enable project agents only for repositories you trust (Level 4).",
         },
         {
+          type: "example",
+          title: "Real-life example",
+          context: "Contracting",
+          text: "Briefing a subagent is writing a statement of work for a contractor. The contractor has never seen your codebase or your Slack. A good SOW says the deliverable, the scope, what is out of scope, where the relevant material is, and the format of the handover. A vague one gets you a confident invoice for the wrong work.",
+        },
+        {
+          type: "steps",
+          title: "Try it",
+          items: [
+            "Run `01-subagent.ts` and compare the main agent's tokens with the helper's. Where did the file reads go?",
+            "Give `delegate` a one-line task and read the rejection. Rewrite it using the five-part brief.",
+          ],
+        },
+        {
           type: "section",
           title: "Further reading",
           body: [],
@@ -142,7 +156,7 @@ export const level5: Topic = {
           type: "section",
           title: "Fan-out and fan-in",
           body: [
-            "Run workers at the same time with `Promise.all`, then make one more call that sees only their reports. Two details matter. Use `Promise.allSettled`, so one failed worker does not discard the others' work, and tell the synthesizer which worker failed. And give each worker a full brief with its own scope, because vague overlapping tasks make workers duplicate each other.",
+            "Run workers at the same time with `Promise.allSettled`, then make one more call that sees only their reports. Two details matter. Use `allSettled` rather than `Promise.all`, so one failed worker does not discard the others' work, and tell the synthesizer which worker failed. And give each worker a full brief with its own scope, because vague overlapping tasks make workers duplicate each other.",
           ],
         },
         { type: "code", language: "ts", filename: "examples/level-5/lib/patterns.ts", code: patterns },
@@ -151,8 +165,10 @@ export const level5: Topic = {
           type: "section",
           title: "A pipeline with a gate",
           body: [
-            "In the second shape, an implementer writes code, a gate checks it, and only then does a reviewer look. The gate is not a model. It is a real command, here `node --test`, that passes or fails. On a failure, its output goes back to the implementer as feedback, up to a limit. The reviewer only ever sees work that already passed.",
+            "In the second shape, a planner reads the tests and writes a short plan, an implementer follows it, a gate checks the result, and only then does a reviewer look. The planner has read-only tools and runs once; its plan travels to the implementer as text, the cheapest kind of handoff.",
+            "The gate is the stage that matters most, and it is not a model. It is a real command, here `node --test`, that passes or fails. On a failure, its output goes back to the implementer as feedback, up to a limit. The reviewer only ever sees work that already passed.",
             "The demo project ships with tests and no implementations. The tests are the specification, so the agent's job is unambiguous.",
+            "Two rules keep the gate honest. First, the implementer may write only `slugify.ts` (`writable` in `fileTools`), so it cannot make the gate pass by editing the test. Second, `runGate` runs the agent's code with a minimal environment: `PATH` and a few system variables, but no `ANTHROPIC_API_KEY`. Code the agent wrote is untrusted code, and 4.3 applies to it.",
           ],
         },
         { type: "code", language: "ts", filename: "examples/level-5/03-pipeline-gate.ts", code: pipelineGate },
@@ -174,6 +190,15 @@ export const level5: Topic = {
           title: "Real-life example",
           context: "DevOps",
           text: "This is a CI pipeline: build, then test, then deploy, and each stage blocks the next. Nobody asks the build step whether the tests are probably fine. The gate in this pipeline plays the same role between agents.",
+        },
+        {
+          type: "steps",
+          title: "Try it",
+          items: [
+            "Run `03-pipeline-gate.ts` and read the plan, the gate output and the review.",
+            "Change the system prompt so the implementer tries to edit the test, and confirm `writable` stops it.",
+            "Run `02-fan-out.ts` and find the line in the final answer that comes from each worker.",
+          ],
         },
         {
           type: "section",
@@ -216,7 +241,8 @@ export const level5: Topic = {
           title: "State, in code",
           body: [
             "The module below is that pattern in about 65 lines. `feature_list.json` holds the tasks. `PROGRESS.md` is an append-only log. `reentryPrompt` builds the message that starts every session, written for an agent with no memory. And `runFeatures` loops: take the first unfinished feature, run an agent, run a gate, and only if the gate passes does the harness mark it done.",
-            "Notice who flips `passes`. The agent does not. The harness does, after a real test passed. The agent cannot declare victory early, because it has no way to.",
+            "Notice who flips `passes`. The agent does not. The harness does, after a real test passed. A prompt line saying \"do not edit test files\" would not make that true, because the agent has a write tool. What makes it true is `fileTools(dir, { write: true, writable: [`${feature.id}.ts`] })` in the example below: the agent can write its implementation file and nothing else, so it cannot touch the tests or `feature_list.json`. It cannot declare victory early, because it has no way to.",
+            "Anthropic's initializer is a separate first session that sets up the project. Here `seedWorkspace` plays that role as plain code, which is cheaper and repeatable. Use an initializer agent when the setup itself needs judgment, such as turning a spec into a feature list.",
           ],
         },
         { type: "code", language: "ts", filename: "examples/level-5/lib/progress.ts", code: progress },
@@ -241,13 +267,22 @@ export const level5: Topic = {
           title: "Wakeups and schedules",
           body: [
             "A long job is often many short runs. A cron job, a queue worker or a scheduled cloud agent starts a fresh run, which reads its state from the files, does one unit of work, writes its state and exits. Because every run starts from files, a crash costs you one unit of work, not the whole job. Pi's print mode (5.4) makes this a one-line command.",
+            "A heartbeat answers the other question: is a run that has not finished still alive? Each turn, the run writes the current time to a file (or a database row). A separate watchdog checks it; if the heartbeat is older than a few turns' worth of time, the run is stuck or dead, and the watchdog kills it and lets the next scheduled run take over.",
           ],
+        },
+        {
+          type: "code",
+          language: "bash",
+          filename: "crontab (one unit of work every 30 minutes)",
+          code: `# m   h  dom mon dow  command
+*/30  *  *   *   *    cd /srv/project && timeout 25m pi -p "Read PROGRESS.md and feature_list.json. Implement the first feature whose passes is false, then append one line to PROGRESS.md." >> agent.log 2>&1`,
         },
         {
           type: "section",
           title: "Stop a stuck agent",
           body: [
             "An agent that is failing often keeps trying the same thing. A loop guard watches the tool calls: it hashes the tool name plus its arguments (with keys sorted, so a reordered call still matches) and trips when the same call repeats too many times in a short window, or when the total number of calls exceeds a budget. It runs in `beforeTool`, so it can stop the run before the tool executes.",
+            "When it trips it throws, so catch it where you start the agent. In `04-progress-file.ts` the catch turns it into a failed session: the gate fails, `PROGRESS.md` records it, and `runFeatures` stops for a human instead of crashing. Expect false positives too: reading the same file, editing it, then reading it again is three identical `read_file` calls, though the file changed. Set `maxRepeats` with that in mind.",
           ],
         },
         { type: "code", language: "ts", filename: "examples/level-5/lib/loop-guard.ts", code: loopGuard },
@@ -270,6 +305,21 @@ export const level5: Topic = {
           variant: "danger",
           title: "Danger",
           text: "A long-running agent with no budget and no loop guard is a runaway bill. Set the limits before you start the run, not after the first surprise invoice.",
+        },
+        {
+          type: "example",
+          title: "Real-life example",
+          context: "Hospital",
+          text: "Nurses hand over at every shift change. The outgoing nurse does not rely on the incoming one remembering yesterday; there is a written chart: what was done, what is pending, what to watch. The feature list is the chart, PROGRESS.md is the handover notes, and the re-entry prompt is the five-minute briefing at the start of the shift.",
+        },
+        {
+          type: "steps",
+          title: "Try it",
+          items: [
+            "Run `04-progress-file.ts`, press Ctrl+C during the second feature, run it again, and confirm it resumes.",
+            "Read `PROGRESS.md`. Could a new person continue the work from it alone?",
+            "Run `05-loop-guard.ts` and change `maxRepeats` to see when it trips.",
+          ],
         },
         {
           type: "section",
@@ -313,6 +363,7 @@ export const level5: Topic = {
           title: "Print mode",
           body: [
             "Print mode runs the prompt, writes the final assistant text to stdout and exits. When input or output is piped, Pi selects it automatically. That makes it a one-line building block for scripts and cron jobs.",
+            "RPC mode is for a program that keeps Pi running and talks to it: it writes JSON commands to Pi's stdin (send a prompt, steer, abort, switch model) and reads responses and events from stdout, one JSON object per line. An editor plugin or a web backend uses it. If your program is in Node or Bun, the SDK below is usually simpler.",
           ],
         },
         {
@@ -337,6 +388,7 @@ pi --mode json "Inspect this repository" > events.jsonl`,
           body: [
             "The SDK embeds the agent in a Node or Bun process. `createAgentSession()` makes a session that owns one conversation, its model and tools. `session.prompt()` resolves when the run finishes, including automatic retries, and `subscribe()` streams events. If a prompt arrives while the session is already streaming, you must choose `steer()` (enter after the current turn) or `followUp()` (enter after the run). Always call `dispose()` when done.",
             "Use an in-memory session manager when you do not want files written. SDK sessions do not load MCP, codemode or tool search by default, so add those extension factories yourself if you need them.",
+            "Be explicit about two things the defaults decide for you. Without `model`, the session uses the machine's configured default, so the same script behaves differently on a teammate's laptop. Without `tools`, it gets `read`, `bash`, `edit` and `write`, which is a full coding agent with no guard. The example picks the model in code and passes read-only tools.",
           ],
         },
         { type: "code", language: "ts", filename: "examples/level-5/06-pi-sdk.ts", code: piSdk },
@@ -344,7 +396,7 @@ pi --mode json "Inspect this repository" > events.jsonl`,
           type: "section",
           title: "An agent reviewer in CI",
           body: [
-            "A CI agent runs untrusted input: a pull request is text and code that someone else wrote. The workflow below is the print-mode command from above, arranged so that a hostile pull request can do little. Each choice is deliberate.",
+            "A CI agent runs untrusted input: a pull request is text and code that someone else wrote. The workflow below is the print-mode command from above, arranged so that a hostile pull request can do little. A `checks` job runs lint and tests first with no secrets, and the agent reviews only code that passed them, the gate from 5.2. Each choice is deliberate.",
           ],
         },
         { type: "code", language: "yaml", filename: ".github/workflows/agent-review.yml", code: agentReview },
@@ -358,7 +410,9 @@ pi --mode json "Inspect this repository" > events.jsonl`,
             ["`persist-credentials: false`", "Otherwise checkout leaves the token in `.git/config`, where the agent could read it"],
             ["Two steps, split credentials", "The agent has the model key and no GitHub token. The step that posts the comment has the token and runs no agent"],
             ["`BASE_SHA` through `env`", "GitHub's guidance: pass untrusted or event values through an intermediate environment variable, not into the shell script text"],
-            ["Read-only tools, `--no-approve`, `--no-context-files`, `--no-extensions`, `--no-skills`, `--no-mcp`", "Nothing from the repository (instruction files, extensions, skills, MCP config) can change the agent's tools or rules"],
+            ["Read-only tools, `--no-approve`, `--no-context-files`, `--no-extensions`, `--no-skills`, `--no-mcp`", "Nothing from the repository (instruction files, extensions, skills, MCP config) can change the agent's tools or rules. `--no-approve` ignores project config that would otherwise need trust"],
+            ["`checks` job with `needs:`", "Lint and tests gate the review. That job runs the PR's code, so it gets no secrets"],
+            ["Secret scan before posting", "The agent still has the model key in its environment and a `read` tool. A prompt injection in the diff could make it read `/proc/self/environ` and print the key into its review: private data, untrusted content and an outbound channel, the lethal trifecta from 4.4. The scan closes the outbound channel"],
             ["`timeout-minutes`", "A stuck agent must not run, and bill, for hours"],
           ],
         },
@@ -372,8 +426,23 @@ pi --mode json "Inspect this repository" > events.jsonl`,
           type: "section",
           title: "Other frontends",
           body: [
-            "The same pieces power other front doors. A cron job runs print mode on a schedule. A web UI or desktop app can drive Pi over RPC or the SDK. For chat, Pi's repository points to `pi-chat`, an extension that bridges Discord and Telegram channels to a sandboxed Pi session, with each connected channel getting its own micro-VM. That is Level 4's sandboxing put to work.",
+            "The same pieces power other front doors. A cron job runs print mode on a schedule. A web UI or desktop app can drive Pi over RPC or the SDK. For chat, Pi's repository points to `pi-chat`, an extension that bridges Discord and Telegram channels to a sandboxed Pi session, with each connected channel getting its own Gondolin micro-VM (Alpine Linux) where its tools run. That is Level 4's sandboxing put to work.",
           ],
+        },
+        {
+          type: "steps",
+          title: "Try it",
+          items: [
+            "Run `git diff | pi --print --tools read,grep,find,ls \"Review this change\"` on a real change.",
+            "Run `06-pi-sdk.ts`, then change the tool list and the model and run it again.",
+            "Read `07-agent-review.yml` and name, for each step, which secret it can see.",
+          ],
+        },
+        {
+          type: "example",
+          title: "Real-life example",
+          context: "Unix",
+          text: "Print mode makes Pi a Unix filter: text in, text out, an exit code you can test. The SDK makes it a library you import. RPC makes it a server you talk to. The same engine sits behind all three, the way `git` is a command, `libgit2` is a library, and a Git server speaks a protocol.",
         },
         {
           type: "section",

@@ -50,6 +50,13 @@ test("summarizeTrace totals tokens, cost and per-tool stats", async () => {
   assert.equal(s.byTool.broken?.errors, 1);
 });
 
+test("summarizeTrace estimates the context tokens each tool's results added (about 4 characters per token)", () => {
+  const tool = (name: string, outputChars: number) => ({ type: "tool" as const, turn: 1, name, input: {}, ms: 1, ok: true, outputChars, truncated: false });
+  const s = summarizeTrace([tool("read_file", 8000), tool("read_file", 4000), tool("search", 400)], "claude-opus-5-5");
+  assert.equal(s.byTool.read_file?.estTokens, 3000);
+  assert.equal(s.byTool.search?.estTokens, 100);
+});
+
 test("a trace survives a round trip through a JSONL file", async () => {
   const { events } = await tracedRun();
   const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "trace-")), "run.jsonl");

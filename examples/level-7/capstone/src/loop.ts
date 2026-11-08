@@ -21,12 +21,17 @@ export async function runLoop(opts: {
 
     const started = performance.now();
     const res = await call({ system, messages, tools: defs });
-    hooks?.afterModel?.({ turn, usage: { input: res.usage.input_tokens, output: res.usage.output_tokens }, stop: String(res.stop_reason), ms: performance.now() - started });
+    const u = res.usage;
+    const usage = { input: u.input_tokens, output: u.output_tokens, cacheRead: u.cache_read_input_tokens ?? 0, cacheWrite: u.cache_creation_input_tokens ?? 0 };
+    hooks?.afterModel?.({ turn, usage, stop: String(res.stop_reason), ms: performance.now() - started });
     messages.push({ role: "assistant", content: res.content });
 
+    if (res.stop_reason === "pause_turn") continue; // the API paused a long turn: send the history back and it resumes
     if (res.stop_reason !== "tool_use") {
       const text = res.content.filter((b): b is Anthropic.TextBlock => b.type === "text").map((b) => b.text).join("");
-      return { text, turns: turn, finished: true, messages };
+      // Only end_turn (or a stop sequence) is an answer. max_tokens is a cut-off reply; refusal is a declined one.
+      const finished = res.stop_reason === "end_turn" || res.stop_reason === "stop_sequence";
+      return { text, turns: turn, finished, ...(!finished && { stopReason: String(res.stop_reason) }), messages };
     }
 
     const results: Anthropic.ToolResultBlockParam[] = [];

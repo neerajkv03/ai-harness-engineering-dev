@@ -21,6 +21,14 @@ test("returns the final text with turn and token counts", async () => {
   assert.equal(r.finished, true);
 });
 
+test("a reply cut off at max_tokens, or a refusal, is not a finished answer", async () => {
+  for (const stop of ["max_tokens", "refusal"] as const) {
+    const r = await runAgent({ system: "s", task: "t", call: scripted([{ ...textReply("partial"), stop_reason: stop }]) });
+    assert.equal(r.finished, false, stop);
+    assert.equal(r.stopReason, stop);
+  }
+});
+
 test("runs a tool and sends the result back with the matching id", async () => {
   const call = scripted([toolReply([{ name: "echo", input: { text: "hi" } }]), textReply("done")]);
   const r = await runAgent({ system: "s", task: "t", call, tools: [echo] });

@@ -1,9 +1,14 @@
-FROM node:24-bookworm-slim
+# Pin both versions. An unpinned base image or package means a rebuild can pull code you never reviewed (4.4).
+# Bump them on purpose, after reading the changelog. For a stronger pin, use the image digest: node:24.22.1-bookworm-slim@sha256:...
+FROM node:24.22.1-bookworm-slim
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends bash ca-certificates git ripgrep \
   && rm -rf /var/lib/apt/lists/*
-RUN npm install -g --ignore-scripts @earendil-works/pi-coding-agent
+RUN npm install -g --ignore-scripts @earendil-works/pi-coding-agent@1.5.0
+# The run script starts Pi as your own (non-root) user id with HOME=/home/pi. Make that home writable for any id;
+# a new named volume mounted at /home/pi/.pi/agent copies these permissions on first use.
+RUN mkdir -p /home/pi/.pi/agent && chmod -R 0777 /home/pi
 
 WORKDIR /workspace
 ENTRYPOINT ["pi"]

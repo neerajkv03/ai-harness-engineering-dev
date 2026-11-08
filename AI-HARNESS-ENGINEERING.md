@@ -1,6 +1,6 @@
 # AI Harness Engineering — Learning Path (Scratch → Advanced)
 
-Harness = everything around the model that turns it into a dependable agent: system prompt, tools, context management, permissions, memory, orchestration, evals. The model is the engine; the harness is the car. Same model, better harness, better results (LangChain moved 30th → 5th on Terminal-Bench 2.0 by changing only the harness).
+Harness = everything around the model that turns it into a dependable agent: system prompt, tools, context management, permissions, memory, orchestration, evals. The model is the engine; the harness is the car. Same model, better harness, better results (LangChain moved from outside the Top 30 to the Top 5 on Terminal-Bench 2.0 by changing only the harness).
 
 Pi (pi.dev) is used as the reference harness throughout because it is minimal, readable, and built to be extended rather than configured.
 
@@ -39,7 +39,7 @@ Pi (pi.dev) is used as the reference harness throughout because it is minimal, r
 ### 1.1 Landscape (2026)
 - Claude Code, Codex CLI, Gemini CLI, Amp, Cursor, Droid, Pi
 - Open vs. closed harnesses; what "minimal" buys you
-- Terminal-Bench 2.0 and SWE-bench as harness scoreboards
+- Terminal-Bench (2.0, now 4.0) and SWE-bench as harness scoreboards
 
 ### 1.2 Pi: install and first session
 - `npm i -g @earendil-works/pi-coding-agent` (older scope: `@mariozechner`)
@@ -187,7 +187,7 @@ Pi (pi.dev) is used as the reference harness throughout because it is minimal, r
 ## Level 6 — Evaluation and Observability
 
 ### 6.1 Measuring a harness
-- Task suites: SWE-bench, Terminal-Bench 2.0, internal golden tasks
+- Task suites: SWE-bench, Terminal-Bench (now 4.0), internal golden tasks
 - Metrics: pass rate, cost per task, tokens per task, turns per task, time
 - Ablations: change one harness component, hold model fixed
 

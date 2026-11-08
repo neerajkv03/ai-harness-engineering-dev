@@ -25,7 +25,7 @@ function runGitStatus(): Promise<string> {
 
 const messages: Anthropic.MessageParam[] = [{ role: "user", content: "Are there uncommitted changes? Use the tool." }];
 
-const first = await client.messages.create({ model: MODEL, max_tokens: 1024, tools: [gitStatus], messages });
+const first = await client.messages.create({ model: MODEL, max_tokens: 16000, tools: [gitStatus], messages });
 const call = first.content.find((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
 if (!call) throw new Error("model did not call the tool");
 
@@ -35,5 +35,5 @@ messages.push({
   content: [{ type: "tool_result", tool_use_id: call.id, content: await runGitStatus() }],
 });
 
-const final = await client.messages.create({ model: MODEL, max_tokens: 1024, tools: [gitStatus], messages });
+const final = await client.messages.create({ model: MODEL, max_tokens: 16000, tools: [gitStatus], messages });
 console.log(final.content.find((b): b is Anthropic.TextBlock => b.type === "text")?.text);

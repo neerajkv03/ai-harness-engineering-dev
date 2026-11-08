@@ -21,6 +21,15 @@ test("reports a redirect target without following it", async () => {
   assert.match(formatResult(r), /redirects to https:\/\/example\.com\//);
 });
 
+test("cancelling (Pi's abort signal) aborts the request instead of waiting for it", async () => {
+  const hangs: FetchLike = (_url, init) =>
+    new Promise((_resolve, reject) => init.signal?.addEventListener("abort", () => reject(init.signal!.reason)));
+  const controller = new AbortController();
+  const pending = checkStatus("https://example.com", hangs, 10_000, controller.signal);
+  controller.abort();
+  await assert.rejects(pending, { name: "AbortError" });
+});
+
 test("rejects a bad URL with a message the model can act on", () => {
   assert.throws(() => parseUrl("example.com"), /not a valid URL.*https:\/\/example\.com\/health/);
 });

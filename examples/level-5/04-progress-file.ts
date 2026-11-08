@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { anthropicCaller, runAgent } from "./lib/agent.ts";
 import { seedWorkspace } from "./lib/demo-workspace.ts";
-import { LoopGuard } from "./lib/loop-guard.ts";
+import { BudgetExceeded, LoopDetected, LoopGuard } from "./lib/loop-guard.ts";
 import { runGate } from "./lib/patterns.ts";
 import { loadFeatures, runFeatures } from "./lib/progress.ts";
 import { fileTools } from "./lib/tools.ts";
@@ -24,16 +24,24 @@ const result = await runFeatures({
   // Every session is a brand-new agent. The re-entry prompt (built from the progress log) is all it knows.
   implement: async (feature, prompt) => {
     const guard = new LoopGuard({ maxCalls: 25 }); // a stuck agent stops itself instead of burning tokens
-    const r = await runAgent({
-      system: "You write TypeScript. You cannot run code, so read the test file carefully. You may only write the implementation file.",
-      task: prompt,
-      tools: fileTools(dir, { write: true }),
-      call,
-      maxTurns: 10,
-      beforeTool: (name, input) => guard.record(name, input),
-    });
-    console.log(`  agent (${feature.id}): ${r.text.slice(0, 100)}`);
-    return r.text;
+    try {
+      const r = await runAgent({
+        system: "You write TypeScript. You cannot run code, so read the test file carefully. You may only write the implementation file.",
+        task: prompt,
+        // Enforced, not asked: the agent can write its implementation file and nothing else. It cannot edit the
+        // tests or feature_list.json, so it has no way to mark its own work as passing.
+        tools: fileTools(dir, { write: true, writable: [`${feature.id}.ts`] }),
+        call,
+        maxTurns: 10,
+        beforeTool: (name, input) => guard.record(name, input),
+      });
+      console.log(`  agent (${feature.id}): ${r.text.slice(0, 100)}`);
+      return r.text;
+    } catch (err) {
+      // LoopDetected or BudgetExceeded: end this session, let the gate fail and the log record it, then move on.
+      if (err instanceof LoopDetected || err instanceof BudgetExceeded) return `stopped by loop guard: ${err.message}`;
+      throw err;
+    }
   },
   // The harness, not the agent, decides whether a feature is done: the real tests either pass or they do not.
   gate: (feature) => {

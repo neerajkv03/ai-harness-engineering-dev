@@ -40,6 +40,7 @@ export function createTracer(emit: Emit) {
           const started = performance.now();
           try {
             const out = await tool.run(input);
+            // `truncated` looks for the "[truncated" marker our own tools write; tools with another format need their own check.
             emit({ type: "tool", turn, name: tool.name, input, ms: round(performance.now() - started), ok: true, outputChars: out.length, truncated: /\[truncated/.test(out) });
             return out;
           } catch (err) {
@@ -67,11 +68,14 @@ export function summarizeTrace(events: TraceEvent[], model: string) {
     { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
   );
 
-  const byTool: Record<string, { count: number; totalMs: number; errors: number }> = {};
+  // estTokens: roughly how many tokens this tool's results put into the context (about 4 characters per token).
+  // ponytail: a chars/4 estimate; call countTokens on the result text when you need the exact number.
+  const byTool: Record<string, { count: number; totalMs: number; errors: number; estTokens: number }> = {};
   for (const t of tools) {
-    const s = (byTool[t.name] ??= { count: 0, totalMs: 0, errors: 0 });
+    const s = (byTool[t.name] ??= { count: 0, totalMs: 0, errors: 0, estTokens: 0 });
     s.count++;
     s.totalMs += t.ms;
+    s.estTokens += Math.ceil(t.outputChars / 4);
     if (!t.ok) s.errors++;
   }
 
@@ -79,6 +83,7 @@ export function summarizeTrace(events: TraceEvent[], model: string) {
     turns: models.length,
     toolCalls: tools.length,
     usage,
+    // Prices every cache write at the 5-minute rate. A run that uses 1-hour caching costs more than this says.
     costUsd: costUsd(model, { input: usage.input, output: usage.output, cacheRead: usage.cacheRead, cacheWrite5m: usage.cacheWrite }),
     modelMs: round(models.reduce((s, m) => s + m.ms, 0)),
     toolMs: round(tools.reduce((s, t) => s + t.ms, 0)),

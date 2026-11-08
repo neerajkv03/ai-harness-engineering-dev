@@ -10,7 +10,7 @@ const textOf = (m: Anthropic.Message): string =>
 
 async function ask(history: Anthropic.MessageParam[], userMessage: string): Promise<string> {
   history.push({ role: "user", content: userMessage });
-  const reply = await client.messages.create({ model: MODEL, max_tokens: 1024, messages: history });
+  const reply = await client.messages.create({ model: MODEL, max_tokens: 16000, messages: history });
   const text = textOf(reply);
   history.push({ role: "assistant", content: text });
   return text;

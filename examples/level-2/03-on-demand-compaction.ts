@@ -51,6 +51,9 @@ for (const [index, question] of questions.entries()) {
       // Replace ALL summarized messages with the block, exactly as returned (it is signed).
       history = [{ role: "assistant", content: summary.content }];
       console.log(`   -> compacted before turn ${turn + 1}`);
+    } else {
+      // No summary came back (for example the call hit max_tokens). Keep the full history and try again later.
+      console.warn(`   -> compaction returned stop_reason "${summary.stop_reason}"; history left as is`);
     }
   }
 }

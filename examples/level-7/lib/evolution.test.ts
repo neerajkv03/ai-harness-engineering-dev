@@ -71,6 +71,7 @@ test("a good proposal earns human review, does NOT change the live harness, and 
   assert.equal(report.status, "ready_for_review");
   assert.equal(report.predictionHeld, true);
   assert.ok(report.pValue! < 0.05);
+  assert.ok(report.holdoutPValue! < 0.05, "the win was confirmed on seeds the selection never saw");
   assert.equal(fs.readFileSync(path.join(live, "read-tool.json"), "utf8"), before, "the live harness is untouched without approval");
 
   const merged = await evolveOnce({ harnessDir: live, proposer: asProposer(proposal()), trials: 40, approve: async () => true });

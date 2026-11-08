@@ -34,6 +34,7 @@ const tools: Anthropic.Tool[] = [
 // A tool result is just text in the history. Here, the contents of a 120-line file the agent read earlier.
 const fileContents = Array.from({ length: 120 }, (_, i) => `export const route${i} = router.get("/r${i}", handler${i});`).join("\n");
 
+// A real loop would send the file as a tool_result block (Level 0). Plain text keeps this measurement simple.
 const history: Anthropic.MessageParam[] = [
   { role: "user", content: "Why does GET /r7 return 404?" },
   { role: "assistant", content: "Let me read the routes file." },
@@ -48,6 +49,7 @@ const count = async (p: { system?: string; tools?: Anthropic.Tool[]; messages: A
 const ping: Anthropic.MessageParam[] = [{ role: "user", content: "hi" }];
 const baseline = await count({ messages: ping });
 const systemTokens = (await count({ system, messages: ping })) - baseline;
+// Includes a hidden system prompt the API adds whenever `tools` is present, so even one small tool costs hundreds of tokens.
 const toolTokens = (await count({ tools, messages: ping })) - baseline;
 const historyTokens = (await count({ messages: history })) - baseline;
 const total = await count({ system, tools, messages: history });

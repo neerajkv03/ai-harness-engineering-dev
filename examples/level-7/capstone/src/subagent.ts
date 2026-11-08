@@ -11,7 +11,7 @@ export function delegateTool(opts: { call: Caller; system: string; tools: Tool[]
       const { task } = input as { task: string };
       if (typeof task !== "string" || task.length < 60) throw new Error("task is too short. Write a full brief: the goal, the scope, what to skip, and the output format you want back.");
       const result = await runLoop({ system: opts.system, messages: [{ role: "user", content: task }], call: opts.call, tools: opts.tools, maxTurns: opts.maxTurns ?? 8 });
-      return result.finished ? result.text : "The helper ran out of turns before finishing. Narrow the task and try again.";
+      return result.finished ? result.text : `The helper stopped before finishing (${result.stopReason ?? "turn limit"}). Narrow the task and try again.`;
     },
   };
 }

@@ -18,6 +18,7 @@ One plan per level of `AI-HARNESS-ENGINEERING.md`. Each plan lists, per lesson (
 - **Learner:** intermediate TS dev (MEAN/MERN), new to AI. Every concept anchors to something known: REST, Zod/Mongoose schemas, Express middleware, event loop, npm, CI.
 - **Lesson data:** `src/data/learning/level-N.ts`, using the block types in `DESIGN.md` §10 (`section`, `code`, `note`, `example`, `table`, `steps`). No lesson text in components.
 - **Runnable code:** every code block also exists as `examples/level-N/NN-name.ts`, run with `bun run examples/level-N/NN-name.ts`. Lesson shows the same code with a filename caption.
+  - **Exceptions (as built, 2026-11-08):** blocks captioned `snippet`, a config file path or a template name are shapes to copy, not programs, and have no examples file: Pi `settings.json` / `.pi/settings.json` / `mcp.json` (2.2, 3.4, 3.5), the context-editing knobs (2.2), the refund tool schema (3.1), the inject-context + audit-log hook (4.1), the crontab line (5.3), the OTel tracer (6.2), the effort call (6.4), the computer-use loop (7.3), and the `PROGRESS.md` / `WRITEUP.md` templates (2.2, 7.5).
 - **Raw API examples:** Anthropic TypeScript SDK (`@anthropic-ai/sdk`), model `claude-opus-5-5`, needs `ANTHROPIC_API_KEY` or `ant auth login`.
 - **Harness examples:** Pi (`@earendil-works/pi-coding-agent`). Pi API names are verified against `pi.dev` docs and the repo's `packages/coding-agent/docs/` before writing.
 - **Lesson order:** concept → code → gotcha note → real-life analogy → further reading.

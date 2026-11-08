@@ -16,7 +16,7 @@ const ORDERS: Order[] = Array.from({ length: 340 }, (_, i) => ({
 const PAGE_SIZE = 20;
 const Input = z.object({
   status: z.enum(STATUSES).optional(),
-  created_after: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  created_after: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be a date as YYYY-MM-DD, e.g. 2026-10-01").optional(),
   page: z.number().int().min(1).default(1),
 });
 
@@ -25,7 +25,8 @@ export function searchOrders(raw: unknown): string {
   if (!parsed.success) {
     // Error messages are prompts: say which field, what was wrong, and what a valid value looks like.
     const issues = parsed.error.issues.map((i) => `- ${i.path.join(".")}: ${i.message}`).join("\n");
-    return `Invalid input:\n${issues}\nExample: {"status":"shipped","created_after":"2026-10-01","page":1}`;
+    // In an agent loop, send this back as a tool_result with is_error: true, so the model knows the call failed.
+    return `search_orders was not run. Fix these fields and call it again:\n${issues}\nExample: {"status":"shipped","created_after":"2026-10-01","page":1}`;
   }
   const { status, created_after, page } = parsed.data;
 

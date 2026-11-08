@@ -30,7 +30,7 @@ export const level6: Topic = {
           type: "section",
           title: "Benchmarks and your own tasks",
           body: [
-            "Public benchmarks tell you how a harness and a model perform together on a fixed set of tasks. SWE-bench gives an agent real GitHub issues and checks whether its patch passes the project's tests. Terminal-Bench scores agents on terminal tasks, and its site now headlines version 4.0. They are useful for comparing models and harnesses in general.",
+            "Public benchmarks tell you how a harness and a model perform together on a fixed set of tasks. SWE-bench gives an agent real GitHub issues and checks whether its patch passes the project's tests; SWE-bench Pro is a harder variant built from larger, multi-file changes, which 6.4 uses. Terminal-Bench scores agents on terminal tasks, and its site now headlines version 4.0. They are useful for comparing models and harnesses in general.",
             "They cannot tell you how an agent behaves in your repository, with your conventions. For that you need your own tasks. Everything in this lesson is how to build and use them.",
           ],
         },
@@ -64,8 +64,8 @@ export const level6: Topic = {
           type: "section",
           title: "Ten golden tasks",
           body: [
-            "Anthropic's advice on size: in reality, 20 to 50 simple tasks drawn from real failures is a great start. The set below has ten tiny coding tasks. Eight ask the agent to implement a function so a provided test passes. One is a bug fix, and one is a cleanup with two conditions (behavior preserved and the logs gone).",
-            "Look at the two special graders. The bug-fix grader also checks that the test file was not edited, because an agent can \"pass\" by deleting the test. The cleanup grader needs both conditions. Graders that are easy to cheat will be cheated.",
+            "Anthropic's advice on size: in reality, 20 to 50 simple tasks drawn from real failures is a great start. The set below has eleven tiny coding tasks. Eight ask the agent to implement a function so a provided test passes. One is a bug fix, one is a cleanup with two conditions (behavior preserved and the logs gone), and one is the failure you will analyze in 6.3, kept as a regression test.",
+            "Look at `gradeTests`. The agent has a write tool in the same folder as the tests, so it can \"pass\" by emptying a test file. Every grader therefore compares the test file with what setup wrote, fails the task if it changed, and restores it before running, so the grade always runs the real spec. The cleanup grader also needs both conditions. Graders that are easy to cheat will be cheated.",
           ],
         },
         { type: "code", language: "ts", filename: "examples/level-6/lib/golden-tasks.ts", code: goldenTasks },
@@ -73,7 +73,7 @@ export const level6: Topic = {
           type: "note",
           variant: "warning",
           title: "Prove the eval is solvable",
-          text: "Anthropic's rule is to write unambiguous tasks with reference solutions. A 0% score can mean a broken task, not a weak agent. The suite's own test checks that every task fails untouched and passes with its reference solution. Run it before you trust a single number.",
+          text: "A 0% score can mean a broken task, not a weak agent, so write unambiguous tasks with reference solutions (Anthropic's rule). The suite's own test checks that every task fails untouched and passes with its reference. Run it before you trust a single number.",
         },
         {
           type: "section",
@@ -107,6 +107,8 @@ export const level6: Topic = {
           title: "Is it a win or noise?",
           body: [
             "Models are not deterministic, so a single run per task is a coin flip. The statistics you need are small. A Wilson interval turns \"8 of 10\" into an honest range (about 49% to 94%). A permutation test asks: if A and B were identical, how often would shuffling the results produce a gap this big?",
+            "That \"how often\" is the p-value. A p-value of 0.30 means a gap this big turns up 30% of the time between two identical variants, so it proves nothing. Below 0.05 (1 time in 20) is the usual line for \"probably real\". It is not the chance that B is better, and with many comparisons some will cross 0.05 by luck.",
+            "One more catch: trials of the same task are not independent. An easy task passes in both variants, a hard one fails in both, so pooling all trials as if they were separate coin flips makes the interval too narrow and the test too eager. `stratifiedPermutationTest` shuffles the A/B labels only within each task, and the eval script uses it. Read the Wilson interval of a whole suite as optimistic for the same reason. Runs that crashed (a 429, a network error) are recorded as errors and left out of the pass rate, since the agent never got to try.",
           ],
         },
         { type: "code", language: "ts", filename: "examples/level-6/lib/stats.ts", code: stats },
@@ -147,7 +149,7 @@ C. Consistency: an agent that passes a task 4 times out of 5 trials.
           body: [
             "With 10 trials per variant, two identical harnesses look 10 or more points apart 30% of the time, purely by luck. Yet a real 10-point improvement is detected only 1% of the time. Small samples both invent wins and hide real ones. Even at 200 trials per variant, a real 10-point gain is noticed only 63% of the time.",
             "The practical rules: run several trials per task, report an interval and not a bare percentage, treat a small gap as unproven, and add tasks until the question is settled. A bigger improvement needs fewer trials to see.",
-            "The last block shows a second distinction Anthropic makes. pass@k is the chance of at least one success in k tries. pass^k is the chance that all k succeed. For a tool people run once and rely on, pass^k is the honest number: an agent that passes 4 of 5 trials passes three in a row only 40% of the time.",
+            "The last block shows a second distinction Anthropic makes. pass@k is the chance of at least one success in k tries. pass^k is the chance that all k succeed. For a tool people run once and rely on, pass^k is the honest number: for an agent that passes 4 of 5 trials, the estimate from those 5 trials is that it passes three in a row only about 40% of the time. (If its true pass rate were exactly 80%, three in a row would be 51%; the 40% is what these 5 trials support.)",
           ],
         },
         {
@@ -168,6 +170,15 @@ C. Consistency: an agent that passes a task 4 times out of 5 trials.
           title: "Real-life example",
           context: "Product",
           text: "This is an A/B test in a web app. You split the traffic, change one variable, and wait for enough users before deciding. Nobody ships a redesign because the first five visitors preferred it. The golden-task run is the same experiment with tasks instead of visitors.",
+        },
+        {
+          type: "steps",
+          title: "Try it",
+          items: [
+            "Run the golden-task tests: `node --test examples/level-6/lib/golden-tasks.test.ts`.",
+            "Run `02-noise-demo.ts` and find the row where identical variants most often look different.",
+            "Run `01-golden-tasks.ts --limit 3 --trials 2` and read the interval. Is the gap between A and B real?",
+          ],
         },
         {
           type: "section",
@@ -215,13 +226,21 @@ C. Consistency: an agent that passes a task 4 times out of 5 trials.
         {
           type: "code",
           language: "text",
-          filename: "output",
+          filename: "output (shortened: the trace file lines are left out; timings vary)",
           code: `turns: 4   tool calls: 3
 tokens: 9400 in, 165 out   cost on Claude Opus 5.5: $0.0409
-slowest tool: run_checks (301.4 ms)
-  search     calls 1  errors 0  total 32 ms
-  read_file  calls 1  errors 0  total 121 ms
-  run_checks calls 1  errors 1  total 301 ms`,
+time in model calls: 0 ms   time in tools: 474 ms
+slowest tool: run_checks (304 ms)
+  search     calls 1  errors 0  total 38 ms  ~8 tokens of results
+  read_file  calls 1  errors 0  total 132 ms  ~8 tokens of results
+  run_checks calls 1  errors 1  total 304 ms  ~0 tokens of results`,
+        },
+        {
+          type: "section",
+          title: "Token accounting per tool",
+          body: [
+            "The model events give you tokens per turn; the tool events give you tokens per tool. Every result a tool returns sits in the context for the rest of the run and is resent on every later turn, so the `~tokens of results` column shows which tool fills your window. In a real run, a `read_file` that returns whole files usually dwarfs everything else, and that is the tool to truncate or paginate first (3.1). The estimate is characters divided by four; use `countTokens` on the result text when you need the exact figure.",
+          ],
         },
         {
           type: "note",
@@ -258,6 +277,8 @@ cost: $0.0418`,
           title: "Replay and share",
           body: [
             "Inside Pi, `/session` shows the current session's file, ID, message count, token usage and cost. `/export` writes it as HTML or JSONL, and `--mode json` streams events as JSONL for a script. Pi can also resume a session, which replays its history.",
+            "Replay is how you debug with a trace. Step through it one turn at a time and, at each model event, ask what the model had just seen and whether its next action was reasonable given that. The failure is usually one turn earlier than where the run visibly went wrong: a truncated read, a misleading error message, a tool result it misread. To try a fix, `/tree` back to the message before that turn in Pi and branch from there, so the replay starts from exactly the same context.",
+            "The summarizer adds up every entry in the file, including abandoned branches and the model calls behind compaction and cache warming. That is what the session cost, which is not the same as what the current branch's context holds.",
           ],
         },
         {
@@ -292,6 +313,21 @@ const message = await client.messages.create({
   max_tokens: 1024,
   messages: [{ role: "user", content: "Hello, Claude" }],
 });`,
+        },
+        {
+          type: "steps",
+          title: "Try it",
+          items: [
+            "Run `03-trace-run.ts` and open the trace file it prints. Find the tool call that failed.",
+            "Run `04-pi-session-summary.ts` on one of your own Pi sessions from `~/.pi/agent/sessions/`.",
+            "Which tool put the most tokens into the window in that session?",
+          ],
+        },
+        {
+          type: "example",
+          title: "Real-life example",
+          context: "APM",
+          text: "A trace is to an agent what request logging and APM are to a web service. When an endpoint is slow, you open the trace and see the database call that took 900 ms. When an agent fails, you open the transcript and see the read that was cut off. Without the trace, both are guesswork.",
         },
         {
           type: "section",
@@ -398,7 +434,7 @@ trace analysis: no findings`,
           type: "section",
           title: "Every fix becomes a test",
           body: [
-            "When you fix a failure, write a golden task that reproduces it. Here that is a config file longer than the read cap with the target setting after the cap, graded by whether anything else in the file was lost. That task joins your regression suite from 6.1, and a harness change that reintroduces the bug now fails a test instead of a customer.",
+            "When you fix a failure, write a golden task that reproduces it. Here that is a config file longer than the read cap with the target setting after the cap, graded by whether anything else in the file was lost. That task, `edit-long-config`, is now the eleventh golden task in 6.1, and the Level 5 `read_file` got the fix: an `offset` parameter and a pointer saying how to read the rest. A harness change that reintroduces the bug now fails a test instead of a customer.",
           ],
         },
         {
@@ -408,6 +444,21 @@ trace analysis: no findings`,
             "Reading traces by hand does not scale, and researchers are trying to automate it. One 2026 paper describes Agentic Harness Engineering: a closed loop in which every editable harness component has a file-level representation (so edits are explicit and revertible), raw trajectories are distilled into a layered evidence corpus an agent can use, and every edit is paired with a prediction that is checked against the next round's results. Another, Harness-R1, trains a dedicated model to turn batches of agent failures into validated patches, using fresh reruns of the unchanged agent as the reward signal.",
             "Both depend on exactly what this lesson builds: traces, outcome-graded tasks and a way to rerun them. Level 7 returns to this.",
           ],
+        },
+        {
+          type: "steps",
+          title: "Try it",
+          items: [
+            "Run `05-failed-trace.ts` and read the analyzer's findings for the silent and the pointer runs.",
+            "Pick one failure from your own sessions and classify it with the taxonomy table.",
+            "Write the golden task that would have caught it.",
+          ],
+        },
+        {
+          type: "example",
+          title: "Real-life example",
+          context: "Incidents",
+          text: "This is a blameless postmortem. You do not conclude \"the engineer should have been more careful\"; you find the system condition that made the mistake easy, fix that, and add a check so it cannot recur. \"The model should have read the whole file\" is the agent version of blaming the engineer. The fix is the tool that hid the rest of the file.",
         },
         {
           type: "section",
@@ -465,6 +516,7 @@ trace analysis: no findings`,
           title: "Prompt caching",
           body: [
             "The cache is a byte-exact prefix match over the request, in this order: tools, then system prompt, then messages. A change anywhere invalidates everything after it. So keep stable content first, and put anything that varies per request (a timestamp, a request ID, the user's new message) after the last cache breakpoint.",
+            "Where the breakpoint goes matters as much as what comes first. The example puts `cache_control` on the system block, the last block that is identical every call. Top-level `cache_control` (automatic caching) puts the breakpoint on the last block instead, which here is the user's question: each call would write a cache entry that no later call repeats, and read nothing. Automatic placement suits a growing conversation, not one fixed prefix with changing questions.",
             "Some facts to build on. The default lifetime is 5 minutes, refreshed on each hit, and a 1-hour lifetime costs 2 times the base input price to write. Prompts shorter than the minimum are processed without caching and with no error: that minimum is 512 tokens on Claude Opus 5.5, Sonnet 5.5, Haiku 5.5 and Fable 5.1, and larger on some older models. You can set up to 4 breakpoints. And a cache entry only becomes available after the first response starts, so concurrent requests do not share a fresh entry.",
           ],
         },
@@ -500,8 +552,23 @@ Batch API (results arrive later): another 50% off, e.g. cached Claude Opus 5.5 r
           title: "Effort before a second model",
           body: [
             "Anthropic's advice is to sweep effort on your current model before adding another, because most workloads end there. The `effort` parameter governs how much thinking, tool calling and self-verification the model does. Lower effort costs less and is often faster, and how much accuracy it gives up depends on the task.",
-            "Their published measurements on Claude Opus 5.5, on a SWE-bench Pro subset, show the shape. Treat them as one directional data point on their own tasks, not a guarantee. The `cost per solved task` column is just cost divided by pass rate.",
+            "Their published measurements on Claude Opus 5.5, on a SWE-bench Pro subset, show the shape. Treat them as one directional data point on their own tasks, not a guarantee. The `cost per solved task` column is computed here as cost divided by pass rate, so it can differ by a cent from the guide's own rounding.",
           ],
+        },
+        {
+          type: "code",
+          language: "ts",
+          filename: "snippet",
+          code: `// Effort lives inside output_config. On Claude Opus 5.5 the default is "medium", so set it explicitly.
+const res = await client.messages.create({
+  model: "claude-opus-5-5",
+  max_tokens: 16000,
+  output_config: { effort: "low" }, // "low" | "medium" | "high" | "xhigh" | "max"
+  messages,
+});
+
+// A sweep over the golden tasks: one caller per effort level, everything else held fixed (6.1).
+// for (const effort of ["low", "medium", "high"] as const) run the eval with a Caller that sets output_config: { effort }`,
         },
         {
           type: "table",
@@ -517,7 +584,7 @@ Batch API (results arrive later): another 50% off, e.g. cached Claude Opus 5.5 r
           type: "section",
           title: "Using the curve",
           body: [
-            "Going from high to xhigh buys 1.4 more points of success for about 2.5 times the cost per attempt. Whether that is worth it depends on what a failure costs you, and only your own tasks can tell you. Two cautions from the same guide. Sweep each effort level in a separate session, because changing top-level effort mid-session invalidates the cache and distorts the comparison. And results differ by workload: on some research tasks effort bought a lot, on others little.",
+            "Going from high to xhigh buys 1.4 more points of success for about 2.5 times the cost per attempt, and the xhigh figure comes from a single run: by the rules of 6.1, a 1.4-point gap from one run is well inside the noise. Whether that is worth it depends on what a failure costs you, and only your own tasks can tell you. Two cautions from the same guide. Sweep each effort level in a separate session, because changing top-level effort mid-session invalidates the cache and distorts the comparison. And results differ by workload: on some research tasks effort bought a lot, on others little.",
             "When you can check outputs with tests or a verifier, there is a cheaper pattern: run at low effort, then re-run only the failures at high. In Anthropic's tests that came out about 40% cheaper than running everything at high, at the same pass rate. It needs a real check to decide what to re-run, which is exactly what your golden tasks provide.",
           ],
         },
@@ -526,6 +593,7 @@ Batch API (results arrive later): another 50% off, e.g. cached Claude Opus 5.5 r
           title: "Model routing",
           body: [
             "Using a cheap model for easy steps and a strong one for hard steps sounds obviously right, but Anthropic's guidance is to measure first. Tune one model before you add a second. If the effort sweep shows a gap, price the stronger model alone at low effort. Build a pairing only if it beats the single model's whole curve of score against spend.",
+            "Routing has a hidden cost: prompt caches are scoped to one model. A request routed to a second model cannot read the first model's cache, so every switch pays full price for the shared prefix again. One model at lower effort keeps one cache.",
             "Where it does pay is delegation (5.1): subagents that do bulk reading or triage can run on a cheaper model while the main agent keeps the stronger one. Haiku 5.5 is the first model to try for high-volume work with outputs you can check.",
           ],
         },
@@ -549,14 +617,19 @@ Batch API (results arrive later): another 50% off, e.g. cached Claude Opus 5.5 r
           ],
         },
         {
-          type: "code",
-          language: "text",
-          filename: "output (part 2)",
-          code: `effort    solved    cost/attempt   cost/solved task
-low       87.4%     $0.11          $0.13
-medium    92.8%     $0.21          $0.23
-high      95.3%     $0.29          $0.30
-xhigh     96.7%     $0.74          $0.77`,
+          type: "example",
+          title: "Real-life example",
+          context: "Cloud bills",
+          text: "Cutting an LLM bill is like cutting a cloud bill. First the free wins: reserved instances (prompt caching) and spot capacity for work that can wait (the Batch API). Then right-sizing: the same instance at a smaller size (lower effort) before a migration to a different instance family (a second model). Nobody migrates databases to save 10% before they have turned on reserved pricing.",
+        },
+        {
+          type: "steps",
+          title: "Try it",
+          items: [
+            "Run `07-cost-model.ts`, then change `PREFIX` to 2_000 and run it again. How much does caching still save?",
+            "Run `06-prompt-caching.ts` and confirm call 2 reads most of the prefix from cache.",
+            "Price one of your own agent runs from its usage: what share was cache reads?",
+          ],
         },
         {
           type: "section",

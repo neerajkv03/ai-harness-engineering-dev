@@ -46,6 +46,31 @@ export function permutationTest(a: boolean[], b: boolean[], opts: { iterations?:
   return { diff: observed, p: (extreme + 1) / (iterations + 1) };
 }
 
+/**
+ * Stratified (per-task) permutation test. Trials of the same task are not independent: an easy task passes in both
+ * variants, a hard one fails in both. So shuffle the A/B labels only WITHIN each task, never across tasks.
+ * `diff` is the mean over tasks of (B rate - A rate). Use this one when comparing variants on a task suite.
+ */
+export function stratifiedPermutationTest(groups: { a: boolean[]; b: boolean[] }[], opts: { iterations?: number; seed?: number } = {}): { diff: number; p: number } {
+  const { iterations = 10_000, seed = 1 } = opts;
+  const gap = (gs: { a: boolean[]; b: boolean[] }[]) => gs.reduce((s, g) => s + rate(g.b) - rate(g.a), 0) / gs.length;
+  const observed = gap(groups);
+  const rand = mulberry32(seed);
+  let extreme = 0;
+  for (let i = 0; i < iterations; i++) {
+    const shuffled = groups.map(({ a, b }) => {
+      const pool = [...a, ...b];
+      for (let j = pool.length - 1; j > 0; j--) {
+        const k = Math.floor(rand() * (j + 1));
+        [pool[j], pool[k]] = [pool[k]!, pool[j]!];
+      }
+      return { a: pool.slice(0, a.length), b: pool.slice(a.length) };
+    });
+    if (Math.abs(gap(shuffled)) >= Math.abs(observed) - 1e-12) extreme++;
+  }
+  return { diff: observed, p: (extreme + 1) / (iterations + 1) };
+}
+
 function choose(n: number, k: number): number {
   if (k < 0 || k > n) return 0;
   let r = 1;

@@ -29,21 +29,29 @@ const messages: Anthropic.MessageParam[] = [
   { role: "user", content: "Compare the weather right now in Paris, Tokyo and Lima." },
 ];
 
-const first = await client.messages.create({ model: MODEL, max_tokens: 1024, tools: [getWeather], messages });
+const first = await client.messages.create({ model: MODEL, max_tokens: 16000, tools: [getWeather], messages });
+if (first.stop_reason !== "tool_use") {
+  // The model answered without tools (or stopped early). There is nothing to run.
+  console.log(first.content.find((b): b is Anthropic.TextBlock => b.type === "text")?.text);
+  process.exit(0);
+}
 const calls = first.content.filter((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
 console.log(`model asked for ${calls.length} tool calls in one turn`);
 
-// Run all calls concurrently. This is plain Promise.all, like parallel DB queries.
+// Run all calls concurrently, like parallel DB queries. Each call catches its own error, so one failure
+// becomes an is_error result for that call instead of rejecting the whole Promise.all.
 const results: Anthropic.ToolResultBlockParam[] = await Promise.all(
-  calls.map(async (call) => ({
-    type: "tool_result" as const,
-    tool_use_id: call.id,
-    content: await runGetWeather(call.input),
-  })),
+  calls.map(async (call): Promise<Anthropic.ToolResultBlockParam> => {
+    try {
+      return { type: "tool_result", tool_use_id: call.id, content: await runGetWeather(call.input) };
+    } catch (err) {
+      return { type: "tool_result", tool_use_id: call.id, is_error: true, content: String(err instanceof Error ? err.message : err) };
+    }
+  }),
 );
 
 messages.push({ role: "assistant", content: first.content });
 messages.push({ role: "user", content: results }); // ALL results in ONE message
 
-const final = await client.messages.create({ model: MODEL, max_tokens: 1024, tools: [getWeather], messages });
+const final = await client.messages.create({ model: MODEL, max_tokens: 16000, tools: [getWeather], messages });
 console.log(final.content.find((b): b is Anthropic.TextBlock => b.type === "text")?.text);

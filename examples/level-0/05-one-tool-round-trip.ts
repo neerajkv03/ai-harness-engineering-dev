@@ -27,7 +27,7 @@ function runGetWeather(raw: unknown): string {
 
 const messages: Anthropic.MessageParam[] = [{ role: "user", content: "How warm is it in Paris, in celsius?" }];
 
-const first = await client.messages.create({ model: MODEL, max_tokens: 1024, tools: [getWeather], messages });
+const first = await client.messages.create({ model: MODEL, max_tokens: 16000, tools: [getWeather], messages });
 if (first.stop_reason !== "tool_use") throw new Error(`expected tool_use, got ${first.stop_reason}`);
 
 const toolUse = first.content.find((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
@@ -43,5 +43,5 @@ const result: Anthropic.ToolResultBlockParam = {
 messages.push({ role: "assistant", content: first.content });
 messages.push({ role: "user", content: [result] });
 
-const final = await client.messages.create({ model: MODEL, max_tokens: 1024, tools: [getWeather], messages });
+const final = await client.messages.create({ model: MODEL, max_tokens: 16000, tools: [getWeather], messages });
 console.log(final.content.find((b): b is Anthropic.TextBlock => b.type === "text")?.text);

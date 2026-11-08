@@ -1,16 +1,22 @@
 // MILESTONE 8: tracing. Every model call and tool call becomes one JSON line, so a failed run can be read, not guessed at.
+// The fields match Level 6's TraceEvent, so Level 6's summarizer and trace analyzer can read these files too.
 import fs from "node:fs";
 import type { Hooks } from "./types.ts";
 
 export type TraceLine =
-  | { t: string; type: "model"; turn: number; ms: number; usage: { input: number; output: number }; stop: string }
-  | { t: string; type: "tool"; name: string; input: unknown; ms: number; ok: boolean; chars: number };
+  | { t: string; type: "model"; turn: number; ms: number; usage: { input: number; output: number; cacheRead: number; cacheWrite: number }; stop: string }
+  | { t: string; type: "tool"; turn: number; name: string; input: unknown; ms: number; ok: boolean; outputChars: number; truncated: boolean };
 
 export function traceHooks(file: string): Hooks {
-  const write = (line: Omit<TraceLine, "t"> & Record<string, unknown>) => fs.appendFileSync(file, JSON.stringify({ t: new Date().toISOString(), ...line }) + "\n");
+  let turn = 0; // the latest model turn; tool calls belong to the turn that requested them
+  const write = (line: Record<string, unknown>) => fs.appendFileSync(file, JSON.stringify({ t: new Date().toISOString(), ...line }) + "\n");
   return {
-    afterModel: (e) => write({ type: "model", turn: e.turn, ms: Math.round(e.ms), usage: e.usage, stop: e.stop }),
-    afterTool: (e) => write({ type: "tool", name: e.name, input: e.input, ms: Math.round(e.ms), ok: !e.isError, chars: e.output.length }),
+    afterModel: (e) => {
+      turn = e.turn;
+      write({ type: "model", turn: e.turn, ms: Math.round(e.ms), usage: e.usage, stop: e.stop });
+    },
+    afterTool: (e) =>
+      write({ type: "tool", turn, name: e.name, input: e.input, ms: Math.round(e.ms), ok: !e.isError, outputChars: e.output.length, truncated: /\[truncated/.test(e.output) }),
   };
 }
 
